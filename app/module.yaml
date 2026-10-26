@@ -1,0 +1,34 @@
+# Shared UI and the platform services behind common interfaces (token storage, the sign-in sheet).
+product:
+  type: kmp/lib
+  platforms: [android, iosArm64, iosSimulatorArm64]
+
+dependencies:
+  - //core: exported
+  - $compose.foundation: exported
+  - $compose.material3: exported
+  - $compose.components.resources
+  - $libs.androidx.lifecycle.viewmodel.compose
+  - $libs.androidx.lifecycle.runtime.compose
+  - $libs.koin.core: exported
+  - $libs.koin.compose.viewmodel
+  - $libs.navigation.compose
+  - $libs.compose.lucide
+  - $libs.kotlinx.datetime
+
+dependencies@android:
+  - $libs.androidx.activity.compose
+  - $libs.androidx.browser
+
+settings:
+  kotlin:
+    serialization: json
+  compose:
+    enabled: true
+    resources:
+      packageName: dev.ggoggam.hangar.app.generated.resources
+
+settings@android:
+  android:
+    namespace: dev.ggoggam.hangar.app
+    minSdk: 31

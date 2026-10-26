@@ -1,0 +1,7 @@
+product: ios/app
+
+dependencies:
+  - //app
+
+settings:
+  compose: enabled

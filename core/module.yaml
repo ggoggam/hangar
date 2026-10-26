@@ -1,0 +1,30 @@
+# Fly.io's login and API clients. Pure Kotlin, no Compose and no user-facing strings, so it runs on
+# the JVM in CI without Xcode: ./kotlin test -m core -p jvm
+product:
+  type: kmp/lib
+  platforms: [jvm, android, iosArm64, iosSimulatorArm64]
+
+settings:
+  kotlin:
+    serialization: json
+
+settings@android:
+  android:
+    namespace: dev.ggoggam.hangar.core
+    minSdk: 31
+
+dependencies:
+  - $libs.ktor.client.core: exported
+  - $libs.kotlinx.coroutines.core: exported
+  - $libs.kotlincrypto.sha2
+  - $libs.kotlincrypto.crypto.rand
+
+dependencies@android:
+  - $libs.ktor.client.okhttp
+
+dependencies@ios:
+  - $libs.ktor.client.darwin
+
+test-dependencies:
+  - $libs.ktor.client.mock
+  - $libs.kotlinx.coroutines.test

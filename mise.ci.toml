@@ -1,0 +1,6 @@
+# CI-runner-only tools for hangar. Merged over mise.toml when MISE_ENV=ci, which the CI workflow
+# sets, so nothing here lands in a local `mise install`.
+[tools]
+# The ./kotlin wrapper provisions its own JDK, but ktlint (pre-commit) runs on the system java.
+# Hosted runners preinstall one, but not necessarily a fixed version, so it is pinned here.
+java = "temurin-17"

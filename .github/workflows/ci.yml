@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+# Makes mise also load mise.ci.toml, which pins the JDK ktlint runs on. Without this the file is
+# ignored and the runner's default JDK is used.
+env:
+  MISE_ENV: ci
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# GitHub-hosted runners throughout: the repo is public, so they cost nothing, macOS included.
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: jdx/mise-action@v4
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/prek
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      # The ktlint hook runs `mise run kt:fmt`, which rewrites files. prek fails any hook that
+      # modifies the tree and --show-diff-on-failure prints what it changed, so a badly formatted
+      # PR turns the job red with the fix in the log.
+      - name: Run pre-commit checks
+        run: mise run pre-commit
+
+  # core is pure Kotlin, so the JVM run covers its logic on Linux. The ./kotlin wrapper provisions
+  # the toolchain and its JDK itself; only its download cache is kept between runs.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-${{ runner.os }}-test-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          restore-keys: |
+            kotlin-${{ runner.os }}-test-
+
+      - name: Test core on the JVM
+        run: ./kotlin test -m core -p jvm
+
+  # The hosted Ubuntu image has an Android SDK at $ANDROID_HOME, which the build uses.
+  android:
+    name: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-${{ runner.os }}-android-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          restore-keys: |
+            kotlin-${{ runner.os }}-android-
+
+      - name: Build the Android app
+        run: ./kotlin build -m android-app
+
+  # Kotlin/Native needs a Mac to build Apple targets. Simulator builds aren't signed with the
+  # team's certificate, so none is needed here.
+  ios:
+    name: ios
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/Library/Caches/JetBrains/Kotlin
+            ~/.konan
+          key: kotlin-${{ runner.os }}-ios-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          restore-keys: |
+            kotlin-${{ runner.os }}-ios-
+
+      - name: Test core on the iOS simulator
+        run: ./kotlin test -m core -p iosSimulatorArm64
+
+      - name: Build the iOS app for the simulator
+        run: ./kotlin build -m ios-app -p iosSimulatorArm64

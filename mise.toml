@@ -1,0 +1,245 @@
+# Built with the Kotlin Toolchain, not Gradle. The committed ./kotlin wrapper pins the toolchain
+# and provisions its own JDK, so the tools here are only for the style hooks. Xcode is the one
+# prerequisite the wrapper can't provision, and only the iOS tasks need it. The JDK ktlint wants on
+# a CI runner is in mise.ci.toml, which mise merges over this file only when MISE_ENV=ci.
+[tools]
+ktlint = "latest"
+# The `pre-commit` task shells out to prek, so it is declared here rather than assumed present:
+# `mise install` in a fresh clone should be enough to run the hooks.
+prek = "latest"
+
+# ── Build and test ─────────────────────────────────────────────────────────────
+
+[tasks.test]
+description = "Run the core tests on the JVM"
+# The JVM target: it runs anywhere, and core is pure Kotlin, so it covers the same code as the iOS
+# run. CI runs the iOS simulator tests too, on a macOS runner (test:ios).
+run = "./kotlin test -m core -p jvm"
+
+[tasks."test:ios"]
+description = "Run the core tests on the iOS simulator (macOS only)"
+run = "./kotlin test -m core -p iosSimulatorArm64"
+
+[tasks."test:all"]
+description = "Run the core tests on the JVM and the iOS simulator (macOS only)"
+run = "./kotlin test -m core -p jvm -p iosSimulatorArm64"
+
+[tasks."build:android"]
+description = "Build the Android debug APK"
+run = "./kotlin build -m android-app"
+
+[tasks."build:ios"]
+description = "Build the iOS app for the simulator (macOS only)"
+run = "./kotlin build -m ios-app -p iosSimulatorArm64"
+
+# ── Run on a device ────────────────────────────────────────────────────────────
+# Real hardware first, then a running emulator or simulator, and only then booting one:
+#
+#   Android  USB phone > wireless (adb pair) phone > running emulator > boot an AVD
+#   iOS      USB iPhone > network iPhone > booted simulator > boot an iPhone simulator
+#
+# A USB phone beats a wireless one: plugging a phone in for testing is a deliberate choice,
+# while a wirelessly paired phone is usually someone's own phone that happens to be nearby.
+# Either beats an emulator, which is slow to boot on a laptop. The logs tasks attach to the
+# device the dev task would pick and never boot one.
+#
+# Overrides:
+#   HANGAR_DEVICE  an adb serial, a devicectl identifier or a simulator UDID, used as is
+#   HANGAR_AVD     the AVD to boot (default: the first one `emulator -list-avds` prints)
+#   HANGAR_SIM     the simulator to boot by name, e.g. "iPhone 17 Pro" (default: first iPhone)
+#
+# A physical iPhone needs Developer Mode on and to be paired with this Mac; signing is
+# automatic with the team set in ios-app/module.xcodeproj.
+
+[tasks."dev:android"]
+description = "Build, install & launch on an Android phone, else an emulator (booting one if needed)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+serial="$(mise run --quiet device:android boot)"
+./kotlin run -m android-app -d "$serial"
+'''
+
+[tasks."dev:ios"]
+description = "Build, install & launch on an iPhone, else a simulator (booting one if needed; macOS only)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+read -r kind udid <<<"$(mise run --quiet device:ios boot)"
+if [ "$kind" = device ]; then
+  ./kotlin run -m ios-app -p iosArm64 -d "$udid"
+else
+  ./kotlin run -m ios-app -p iosSimulatorArm64 -d "$udid"
+fi
+'''
+
+[tasks."logs:android"]
+description = "Follow the running app's logcat on the device dev:android would pick"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+adb="${ANDROID_HOME:-}/platform-tools/adb"
+[ -x "$adb" ] || adb=adb
+serial="$(mise run --quiet device:android)"
+pid="$("$adb" -s "$serial" shell pidof -s dev.ggoggam.hangar | tr -d '\r' || true)"
+if [ -z "$pid" ]; then
+  echo "Hangar isn't running on $serial; launching the installed app." >&2
+  "$adb" -s "$serial" shell am start -W -n dev.ggoggam.hangar/dev.ggoggam.hangar.MainActivity >/dev/null
+  pid="$("$adb" -s "$serial" shell pidof -s dev.ggoggam.hangar | tr -d '\r' || true)"
+  [ -n "$pid" ] || { echo "Hangar didn't start on $serial. Install it with: mise run dev:android" >&2; exit 1; }
+fi
+echo "Following logcat for pid $pid (main and crash buffers). Ctrl-C to stop." >&2
+exec "$adb" -s "$serial" logcat -v color -b main,crash --pid="$pid"
+'''
+
+[tasks."logs:ios"]
+description = "Relaunch the app with its console attached on the device dev:ios would pick"
+# Kotlin's println and Swift's print go to stdout, which iOS doesn't keep anywhere, so the only
+# way to see them is to launch the app with its console attached. That restarts the app.
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+read -r kind udid <<<"$(mise run --quiet device:ios)"
+echo "Relaunching Hangar with its console attached. Ctrl-C to stop." >&2
+if [ "$kind" = device ]; then
+  exec xcrun devicectl device process launch --console --terminate-existing --device "$udid" dev.ggoggam.hangar
+else
+  exec xcrun simctl launch --console-pty --terminate-running-process "$udid" dev.ggoggam.hangar
+fi
+'''
+
+[tasks."device:android"]
+description = "Print the adb serial of the device to use; with 'boot', boot an AVD if none is running"
+hide = true
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+adb="${ANDROID_HOME:-}/platform-tools/adb"
+[ -x "$adb" ] || adb=adb
+
+describe() {
+  local model
+  model="$("$adb" -s "$1" shell getprop ro.product.model 2>/dev/null | tr -d '\r' || true)"
+  echo "Target: $1 ($2${model:+, $model})" >&2
+  echo "$1"
+}
+
+if [ -n "${HANGAR_DEVICE:-}" ]; then
+  describe "$HANGAR_DEVICE" HANGAR_DEVICE
+  exit 0
+fi
+
+# adb names every emulator `emulator-<port>`; wireless debugging serials are
+# `adb-…._adb-tls-connect._tcp` or `ip:port`. Anything else is a USB phone.
+usb="" wireless="" emulator=""
+for s in $("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+  case "$s" in
+    emulator-*) [ -n "$emulator" ] || emulator="$s" ;;
+    *._adb-tls-connect._tcp* | *:*) [ -n "$wireless" ] || wireless="$s" ;;
+    *) [ -n "$usb" ] || usb="$s" ;;
+  esac
+done
+if [ -n "$usb" ]; then describe "$usb" "USB phone"; exit 0; fi
+if [ -n "$wireless" ]; then describe "$wireless" "wireless phone"; exit 0; fi
+if [ -n "$emulator" ]; then describe "$emulator" "running emulator"; exit 0; fi
+
+[ "${1:-}" = boot ] || { echo "No Android device or emulator is running. Start one with: mise run dev:android" >&2; exit 1; }
+emulator_bin="${ANDROID_HOME:-}/emulator/emulator"
+[ -x "$emulator_bin" ] || { echo "No device attached and no emulator at \$ANDROID_HOME/emulator." >&2; exit 1; }
+avd="${HANGAR_AVD:-$("$emulator_bin" -list-avds | head -1)}"
+[ -n "$avd" ] || { echo "No device attached and no AVD to boot (create one in Android Studio's Device Manager)." >&2; exit 1; }
+echo "No device attached. Booting emulator '$avd' (this can take a few minutes)..." >&2
+nohup "$emulator_bin" -avd "$avd" >/dev/null 2>&1 &
+"$adb" wait-for-device
+# wait-for-device returns once adb sees the transport, long before Android has finished booting.
+waited=0
+until [ "$("$adb" -e shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do
+  sleep 3
+  waited=$((waited + 3))
+  [ "$waited" -lt 600 ] || { echo "Emulator '$avd' didn't finish booting in 10 minutes." >&2; exit 1; }
+done
+describe "$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')" "booted emulator '$avd'"
+'''
+
+[tasks."device:ios"]
+description = "Print 'device <id>' or 'simulator <udid>' to use; with 'boot', boot a simulator if none is"
+hide = true
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -n "${HANGAR_DEVICE:-}" ]; then
+  if xcrun simctl list devices | grep -qF "$HANGAR_DEVICE"; then kind=simulator; else kind=device; fi
+  echo "Target: $HANGAR_DEVICE (HANGAR_DEVICE, $kind)" >&2
+  echo "$kind $HANGAR_DEVICE"
+  exit 0
+fi
+
+# A paired iPhone that devicectl can reach (tunnel not "unavailable"), USB before network.
+json="$(mktemp)"
+trap 'rm -f "$json"' EXIT
+if xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1; then
+  phone="$(python3 - "$json" <<'PY'
+import json, sys
+
+devices = json.load(open(sys.argv[1]))["result"]["devices"]
+reachable = [
+    d for d in devices
+    if d["hardwareProperties"].get("platform") == "iOS"
+    and d["hardwareProperties"].get("reality") == "physical"
+    and d["connectionProperties"].get("pairingState") == "paired"
+    and d["connectionProperties"].get("tunnelState") != "unavailable"
+]
+reachable.sort(key=lambda d: d["connectionProperties"].get("transportType") != "wired")
+if reachable:
+    d = reachable[0]
+    how = "USB" if d["connectionProperties"].get("transportType") == "wired" else "network"
+    print(d["identifier"], how, d["deviceProperties"].get("name", "iPhone"))
+PY
+)"
+  if [ -n "$phone" ]; then
+    read -r id how name <<<"$phone"
+    echo "Target: $name over $how ($id)" >&2
+    echo "device $id"
+    exit 0
+  fi
+fi
+
+# Every grep needs `|| true`: no match exits 1, which pipefail and set -e turn into an abort
+# before the message below can say what was missing.
+udid="$(xcrun simctl list devices booted | grep -F iPhone | grep -oE '[0-9A-F-]{36}' | head -1 || true)"
+if [ -z "$udid" ]; then
+  [ "${1:-}" = boot ] || { echo "No iPhone or booted simulator. Start one with: mise run dev:ios" >&2; exit 1; }
+  if [ -n "${HANGAR_SIM:-}" ]; then
+    udid="$(xcrun simctl list devices available | grep -F "$HANGAR_SIM (" | grep -oE '[0-9A-F-]{36}' | head -1 || true)"
+    [ -n "$udid" ] || { echo "No available simulator named '$HANGAR_SIM'." >&2; exit 1; }
+  else
+    udid="$(xcrun simctl list devices available | grep -F iPhone | grep -oE '[0-9A-F-]{36}' | head -1 || true)"
+    [ -n "$udid" ] || { echo "No iPhone simulator available (see 'xcrun simctl list devices')." >&2; exit 1; }
+  fi
+  xcrun simctl boot "$udid" 2>/dev/null || true
+fi
+# `open -a Simulator` shows the window; simctl alone boots headless.
+open -a Simulator --args -CurrentDeviceUDID "$udid"
+xcrun simctl bootstatus "$udid" -b >/dev/null
+echo "Target: $(xcrun simctl list devices | grep -F "$udid" | sed 's/^ *//' || true)" >&2
+echo "simulator $udid"
+'''
+
+[tasks.clean]
+description = "Delete build outputs (needed after manifest-only edits)"
+run = "./kotlin clean"
+
+# ── Style ──────────────────────────────────────────────────────────────────────
+
+[tasks.lint]
+description = "Check Kotlin code style with ktlint"
+run = 'ktlint "**/*.kt" "!**/build/**"'
+
+[tasks."kt:fmt"]
+description = "Auto-format Kotlin code with ktlint"
+run = 'ktlint --format "**/*.kt" "!**/build/**"'
+
+[tasks."pre-commit"]
+description = "Run pre-commit checks via prek"
+run = "prek run --show-diff-on-failure --color=always --all-files --hook-stage=manual"

@@ -1,0 +1,168 @@
+package dev.ggoggam.hangar.app.dashboard
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Lucide
+import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.StatusBadge
+import dev.ggoggam.hangar.app.ui.appStatusLabel
+import dev.ggoggam.hangar.app.ui.appStatusTone
+import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
+
+private enum class DashboardTab(
+    val label: StringResource,
+) {
+    Overview(Res.string.tab_overview),
+    Machines(Res.string.tab_machines),
+    Releases(Res.string.tab_releases),
+    Logs(Res.string.tab_logs),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppDashboardScreen(
+    vm: AppDashboardViewModel,
+    onBack: () -> Unit,
+) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+
+    // Keep the numbers current while the screen is in front, like a dashboard left open.
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(30_000)
+                vm.refresh(quiet = true)
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) }
+                    },
+                    title = {
+                        Text(vm.appName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    actions = {
+                        state.app.value?.let {
+                            StatusBadge(appStatusLabel(it.status), appStatusTone(it.status), Modifier.padding(end = 16.dp))
+                        }
+                    },
+                )
+                // Scrollable so labels keep their width on a narrow phone, and in Korean.
+                PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surface, edgePadding = 4.dp) {
+                    DashboardTab.entries.forEachIndexed { i, t ->
+                        Tab(selected = tab == i, onClick = { tab = i }, text = { Text(stringResource(t.label), maxLines = 1) })
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        val modifier = Modifier.fillMaxSize().padding(padding)
+        when (DashboardTab.entries[tab]) {
+            DashboardTab.Logs -> {
+                LogsTab(vm, state.machines.value.orEmpty(), modifier)
+            }
+
+            else -> {
+                PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = modifier) {
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        when (DashboardTab.entries[tab]) {
+                            DashboardTab.Overview -> overview(state, vm::setWindow)
+                            DashboardTab.Machines -> machines(state.machines)
+                            DashboardTab.Releases -> releases(state.releases)
+                            DashboardTab.Logs -> Unit
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A section's spinner, failure or [content], so every section loads and fails the same way. */
+internal fun <T> LazyListScope.section(
+    load: Load<T>,
+    key: String,
+    content: LazyListScope.(T) -> Unit,
+) {
+    when (load) {
+        Load.Loading -> {
+            item(key = "$key:loading") {
+                Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
+                    CircularProgressIndicator(Modifier.align(Alignment.CenterVertically))
+                }
+            }
+        }
+
+        Load.Failed -> {
+            item(key = "$key:failed") { Muted(stringResource(Res.string.load_failed), Modifier.padding(vertical = 8.dp)) }
+        }
+
+        is Load.Ready -> {
+            content(load.value)
+        }
+    }
+}
+
+@Composable
+internal fun Muted(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = modifier)
+}
+
+@Composable
+internal fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+}

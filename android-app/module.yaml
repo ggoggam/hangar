@@ -1,0 +1,14 @@
+product: android/app
+
+dependencies:
+  - //app
+  - $libs.androidx.activity.compose
+
+settings:
+  android:
+    namespace: dev.ggoggam.hangar
+    applicationId: dev.ggoggam.hangar
+    minSdk: 31
+    versionCode: 1
+    versionName: "0.1.0"
+  compose: enabled

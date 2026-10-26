@@ -1,0 +1,9 @@
+build/
+.kotlin/
+.idea/
+*.iml
+.DS_Store
+xcuserdata/
+local.properties
+android-app/keystore.properties
+android-app/*.keystore

@@ -1,0 +1,205 @@
+package dev.ggoggam.hangar.app.dashboard
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dev.ggoggam.hangar.app.session.Session
+import dev.ggoggam.hangar.core.FlyApi
+import dev.ggoggam.hangar.core.FlyApiException
+import dev.ggoggam.hangar.core.FlyAppDetail
+import dev.ggoggam.hangar.core.FlyAppMetrics
+import dev.ggoggam.hangar.core.FlyCertificate
+import dev.ggoggam.hangar.core.FlyIp
+import dev.ggoggam.hangar.core.FlyLogEntry
+import dev.ggoggam.hangar.core.FlyLogs
+import dev.ggoggam.hangar.core.FlyMachine
+import dev.ggoggam.hangar.core.FlyMachines
+import dev.ggoggam.hangar.core.FlyMetrics
+import dev.ggoggam.hangar.core.FlyRelease
+import dev.ggoggam.hangar.core.FlyToken
+import dev.ggoggam.hangar.core.FlyVolume
+import io.ktor.client.HttpClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.time.Clock
+
+/** A section of the dashboard that loads on its own, so one failing call doesn't blank the rest. */
+sealed interface Load<out T> {
+    data object Loading : Load<Nothing>
+
+    data class Ready<T>(
+        val value: T,
+    ) : Load<T>
+
+    data object Failed : Load<Nothing>
+}
+
+val <T> Load<T>.value: T? get() = (this as? Load.Ready)?.value
+
+enum class MetricsWindow(
+    val seconds: Long,
+) {
+    Hour(3_600),
+    SixHours(6 * 3_600),
+    Day(24 * 3_600),
+}
+
+data class DashboardState(
+    val app: Load<FlyAppDetail> = Load.Loading,
+    val machines: Load<List<FlyMachine>> = Load.Loading,
+    val releases: Load<List<FlyRelease>> = Load.Loading,
+    val volumes: Load<List<FlyVolume>> = Load.Loading,
+    val ips: Load<List<FlyIp>> = Load.Loading,
+    val certificates: Load<List<FlyCertificate>> = Load.Loading,
+    val metrics: Load<FlyAppMetrics> = Load.Loading,
+    val window: MetricsWindow = MetricsWindow.Hour,
+    val refreshing: Boolean = false,
+)
+
+data class LogsState(
+    val entries: List<FlyLogEntry> = emptyList(),
+    /** The machine the logs are narrowed to, or null for all of them. */
+    val instance: String? = null,
+    val failing: Boolean = false,
+)
+
+/** One app's dashboard: `fly status`, `fly machines list`, `fly releases` and `fly logs` in one place. */
+class AppDashboardViewModel(
+    val appName: String,
+    private val org: String,
+    private val http: HttpClient,
+    private val session: Session,
+) : ViewModel() {
+    private val _state = MutableStateFlow(DashboardState())
+    val state: StateFlow<DashboardState> = _state.asStateFlow()
+
+    private val _logs = MutableStateFlow(LogsState())
+    val logs: StateFlow<LogsState> = _logs.asStateFlow()
+
+    private var logCursor: String? = null
+    private var metricsJob: Job? = null
+
+    init {
+        refresh()
+    }
+
+    /** Loads every section again; [quiet] keeps the pull-to-refresh spinner hidden, for timed reloads. */
+    fun refresh(quiet: Boolean = false) {
+        if (session.token.value == null) return
+        if (!quiet) _state.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            val token = session.fresh()
+            if (token == null) {
+                _state.update { it.copy(refreshing = false) }
+                return@launch
+            }
+            loadAll(token).forEach { it.join() }
+            _state.update { it.copy(refreshing = false) }
+        }
+    }
+
+    private fun loadAll(token: FlyToken): List<Job> {
+        val api = FlyApi(http, token)
+        val machines = FlyMachines(http, token)
+        return listOf(
+            load({ api.app(appName) }, { it.app }) { s, v -> s.copy(app = v) },
+            load({ machines.machines(appName) }, { it.machines }) { s, v -> s.copy(machines = v) },
+            load({ api.releases(appName) }, { it.releases }) { s, v -> s.copy(releases = v) },
+            load({ machines.volumes(appName) }, { it.volumes }) { s, v -> s.copy(volumes = v) },
+            load({ machines.ips(appName) }, { it.ips }) { s, v -> s.copy(ips = v) },
+            load({ machines.certificates(appName) }, { it.certificates }) { s, v -> s.copy(certificates = v) },
+            loadMetrics(token),
+        )
+    }
+
+    fun setWindow(window: MetricsWindow) {
+        if (window == _state.value.window) return
+        _state.update { it.copy(window = window, metrics = Load.Loading) }
+        viewModelScope.launch { session.fresh()?.let { loadMetrics(it) } }
+    }
+
+    /** Loads the metrics for the current window, dropping a load still running for another one. */
+    private fun loadMetrics(token: FlyToken): Job {
+        val window = _state.value.window
+        metricsJob?.cancel()
+        return load(
+            { FlyMetrics(http, token).dashboard(org, appName, Clock.System.now().epochSeconds, window.seconds) },
+            { it.metrics },
+        ) { s, v ->
+            s.copy(metrics = v)
+        }.also { metricsJob = it }
+    }
+
+    /** Runs [fetch] and stores its result with [set]; a failed reload keeps what was already shown. */
+    private fun <T> load(
+        fetch: suspend () -> T,
+        get: (DashboardState) -> Load<T>,
+        set: (DashboardState, Load<T>) -> DashboardState,
+    ) = viewModelScope.launch {
+        val result =
+            try {
+                Load.Ready(fetch())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FlyApiException.Unauthorized) {
+                session.signOut()
+                return@launch
+            } catch (e: Exception) {
+                Load.Failed
+            }
+        _state.update { s -> if (result is Load.Failed && get(s) is Load.Ready) s else set(s, result) }
+    }
+
+    /** Narrows the logs to one machine, or all of them for null, starting over from the latest. */
+    fun setLogInstance(instance: String?) {
+        if (instance == _logs.value.instance) return
+        logCursor = null
+        _logs.value = LogsState(instance = instance)
+    }
+
+    /**
+     * Polls for new log lines until cancelled, as `fly logs` does without NATS: straight on while
+     * pages come back full, then backing off to a few seconds when it's quiet.
+     */
+    suspend fun followLogs() {
+        var idle = 1_000L
+        while (true) {
+            val instance = _logs.value.instance
+            try {
+                val token = session.fresh() ?: return
+                val page = FlyLogs(http, token).page(appName, logCursor, instance)
+                if (instance != _logs.value.instance) continue
+                logCursor = page.cursor
+                _logs.update { s ->
+                    val seen = s.entries.mapTo(HashSet()) { it.id }
+                    val fresh = page.entries.filter { it.id.isEmpty() || it.id !in seen }
+                    s.copy(entries = (s.entries + fresh).takeLast(MAX_LOG_LINES), failing = false)
+                }
+                if (page.entries.isNotEmpty()) {
+                    idle = 1_000L
+                    delay(250)
+                } else {
+                    delay(idle)
+                    idle = (idle * 2).coerceAtMost(4_000L)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FlyApiException.Unauthorized) {
+                session.signOut()
+                return
+            } catch (e: Exception) {
+                _logs.update { it.copy(failing = true) }
+                delay(5_000)
+            }
+        }
+    }
+
+    private companion object {
+        const val MAX_LOG_LINES = 1_000
+    }
+}
