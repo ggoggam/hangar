@@ -2,7 +2,6 @@ package dev.ggoggam.hangar.app.session
 
 import android.content.Context
 import android.os.Build
-import android.provider.Settings
 import dev.ggoggam.hangar.app.di.SESSION_NAME
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -11,9 +10,7 @@ import org.koin.dsl.module
 fun androidPlatformModule(context: Context): Module =
     module {
         single<TokenStore> { AndroidTokenStore(context) }
-        single(SESSION_NAME) {
-            // The name the user gave the phone ("Galaxy A23"), else its model number.
-            val device = Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) ?: Build.MODEL
-            "Hangar on $device"
-        }
+        // The model ("SM-A235F"), not the name the user gave the phone, which often has their own
+        // name in it: Fly.io shows this on the approval page and in its token list.
+        single(SESSION_NAME) { "Hangar on ${Build.MODEL}" }
     }
