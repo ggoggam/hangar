@@ -1,9 +1,11 @@
 package dev.ggoggam.hangar.app.session
 
 import dev.ggoggam.hangar.app.di.SESSION_NAME
+import dev.ggoggam.hangar.app.settings.SettingsStore
 import dev.ggoggam.hangar.core.TokenStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIDevice
 
 /** iOS's platform services, for [dev.ggoggam.hangar.app.di.initHangar]. [store] and [signIn] are the Swift bridges. */
@@ -19,6 +21,16 @@ fun iosPlatformModule(
                 override fun write(token: String) = store.write(KEY_TOKEN, token)
 
                 override fun clear() = store.delete(KEY_TOKEN)
+            }
+        }
+        single<SettingsStore> {
+            object : SettingsStore {
+                override fun read(key: String) = NSUserDefaults.standardUserDefaults.stringForKey(key)
+
+                override fun write(
+                    key: String,
+                    value: String,
+                ) = NSUserDefaults.standardUserDefaults.setObject(value, forKey = key)
             }
         }
         single { signIn }

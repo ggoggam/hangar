@@ -3,13 +3,13 @@ package dev.ggoggam.hangar.app.dashboard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,7 +26,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +36,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
@@ -124,19 +124,19 @@ fun AppDashboardScreen(
     }
 }
 
-/** A section's spinner, failure or [content], so every section loads and fails the same way. */
+/**
+ * A section's placeholder cards, failure or [content], so every section loads and fails the same
+ * way. [placeholders] is how many cards stand in for it while it loads.
+ */
 internal fun <T> LazyListScope.section(
     load: Load<T>,
     key: String,
+    placeholders: Int = 1,
     content: LazyListScope.(T) -> Unit,
 ) {
     when (load) {
         Load.Loading -> {
-            item(key = "$key:loading") {
-                Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
-                    CircularProgressIndicator(Modifier.align(Alignment.CenterVertically))
-                }
-            }
+            items(placeholders, key = { "$key:loading:$it" }) { PlaceholderCard() }
         }
 
         Load.Failed -> {
@@ -146,6 +146,16 @@ internal fun <T> LazyListScope.section(
         is Load.Ready -> {
             content(load.value)
         }
+    }
+}
+
+/** A card of shimmering bars, roughly the shape of a title and two lines under it. */
+@Composable
+private fun PlaceholderCard() {
+    Panel {
+        ShimmerBar(Modifier.fillMaxWidth(0.4f).height(18.dp))
+        ShimmerBar(Modifier.fillMaxWidth(0.7f).height(12.dp))
+        ShimmerBar(Modifier.fillMaxWidth(0.55f).height(12.dp))
     }
 }
 

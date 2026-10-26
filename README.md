@@ -23,7 +23,7 @@ simulator, and builds both apps, all on GitHub-hosted runners.
 | Module | What it is |
 |---|---|
 | `core` | Fly.io's login, GraphQL, Machines API, logs and metrics clients on Ktor. Pure Kotlin, tested on the JVM in CI. |
-| `app` | Compose Multiplatform UI and the platform services behind it: token storage, the sign-in sheet. |
+| `app` | Compose Multiplatform UI and the platform services behind it: token storage, settings, the sign-in sheet. |
 | `android-app`, `ios-app` | Entry points. iOS's Keychain and ASWebAuthenticationSession are Swift bridges in `ios-app/src`. |
 
 ## Login
@@ -102,9 +102,10 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
 - **What it sees.** Your password and your Google or GitHub sign-in never reach the app: you
   sign in on fly.io in the system's sign-in browser (Custom Tabs, ASWebAuthenticationSession),
   and the app only gets the code Fly.io shows afterwards.
-- **What it keeps.** Only the token, on the device: sealed under an Android Keystore key and
+- **What it keeps.** The token, on the device: sealed under an Android Keystore key and
   excluded from backups (`allowBackup="false"`), or in the iOS Keychain for this device only.
-  Signing out deletes it. Your email, apps, logs and metrics are held in memory while they're on
+  Signing out deletes it. Besides that, only whether you picked dark or light mode, in
+  SharedPreferences or NSUserDefaults. Your email, apps, logs and metrics are held in memory while they're on
   screen: the app never writes them to disk, logs them or sends them anywhere. Its HTTP clients
   keep no response cache and no cookies (`core/src@android`, `core/src@ios`).
 

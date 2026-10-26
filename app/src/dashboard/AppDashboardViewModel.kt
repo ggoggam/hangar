@@ -85,7 +85,8 @@ class AppDashboardViewModel(
     private var metricsJob: Job? = null
 
     init {
-        refresh()
+        // Quiet, since every section shows its own placeholder until it arrives.
+        refresh(quiet = true)
     }
 
     /** Loads every section again; [quiet] keeps the pull-to-refresh spinner hidden, for timed reloads. */

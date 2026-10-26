@@ -3,6 +3,7 @@ package dev.ggoggam.hangar.app.di
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.login.LoginViewModel
+import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyLogin
 import dev.ggoggam.hangar.core.FlySession
@@ -27,6 +28,7 @@ private val appModule =
         single { FlyDischarges(get()) }
         // Renewals on the main thread, where the screens sign in and out, so the token only changes there.
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
+        single { ThemeSettings(get()) }
         viewModel { LoginViewModel(get(), get(), get(), get(), get(SESSION_NAME)) }
         viewModel { AppsViewModel(get(), get()) }
         viewModel { (app: String, org: String) -> AppDashboardViewModel(app, org, get(), get()) }
@@ -34,7 +36,8 @@ private val appModule =
 
 /**
  * Starts dependency injection with the platform's services in [platform]: a
- * [dev.ggoggam.hangar.core.TokenStore] and the [SESSION_NAME] string. Called once by each
+ * [dev.ggoggam.hangar.core.TokenStore], a
+ * [dev.ggoggam.hangar.app.settings.SettingsStore] and the [SESSION_NAME] string. Called once by each
  * platform's entry point before the first composition; later calls do nothing.
  */
 fun initHangar(platform: Module) {

@@ -35,7 +35,7 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Instant
 
 internal fun LazyListScope.machines(machines: Load<List<FlyMachine>>) {
-    section(machines, "machines") { list ->
+    section(machines, "machines", placeholders = 3) { list ->
         if (list.isEmpty()) item(key = "machines:empty") { Muted(stringResource(Res.string.machines_empty)) }
         // Grouped by process group the way `fly status` lists them, then by region.
         items(list.sortedWith(compareBy({ it.processGroup }, { it.region }, { it.id })), key = { "machine:${it.id}" }) { MachineCard(it) }

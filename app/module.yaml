@@ -1,4 +1,4 @@
-# Shared UI and the platform services behind common interfaces (token storage, the sign-in sheet).
+# Shared UI and the platform services behind common interfaces (token storage, settings, the sign-in sheet).
 product:
   type: kmp/lib
   platforms: [android, iosArm64, iosSimulatorArm64]
