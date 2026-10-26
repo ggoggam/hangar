@@ -141,4 +141,13 @@
     <string name="sign_out_title">Hangar에서 로그아웃할까요?</string>
     <string name="sign_out_body">이 기기에서 Fly.io 토큰을 지워요. 다시 쓰려면 브라우저로 다시 로그인해야 해요.</string>
     <string name="cancel">취소</string>
+    <string name="usage_title">최근 %1$d일</string>
+    <string name="usage_title_org">최근 %1$d일 · %2$s</string>
+    <string name="usage_estimate">≈ %1$s</string>
+    <string name="usage_machine_hours">머신 %1$s시간</string>
+    <string name="usage_hours">%1$s시간</string>
+    <string name="usage_data_out">송신 %1$s</string>
+    <string name="usage_volumes">볼륨 %1$d GB</string>
+    <string name="usage_note">Fly.io 지표(약 15일 보관)를 정가로 계산한 추정치예요. IPv4 주소, 중지된 머신, 데이터베이스와 스토리지 부가 서비스, 할인과 크레딧은 빠져 있어요.</string>
+    <string name="usage_failed">사용량을 추정하지 못했어요.</string>
 </resources>

@@ -141,4 +141,13 @@
     <string name="sign_out_title">Sign out of Hangar?</string>
     <string name="sign_out_body">This removes your Fly.io token from this device. To come back, you'll sign in with the browser again.</string>
     <string name="cancel">Cancel</string>
+    <string name="usage_title">Last %1$d days</string>
+    <string name="usage_title_org">Last %1$d days · %2$s</string>
+    <string name="usage_estimate">≈ %1$s</string>
+    <string name="usage_machine_hours">%1$s machine-hours</string>
+    <string name="usage_hours">%1$s h</string>
+    <string name="usage_data_out">%1$s out</string>
+    <string name="usage_volumes">%1$d GB of volumes</string>
+    <string name="usage_note">Estimated at Fly.io's list prices from its metrics, which it keeps for about 15 days. Leaves out IPv4 addresses, stopped Machines, databases and storage add-ons, discounts and credits.</string>
+    <string name="usage_failed">Couldn't estimate usage.</string>
 </resources>

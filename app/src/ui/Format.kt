@@ -24,6 +24,13 @@ fun decimal(
     return if (fraction.isEmpty()) "$sign$whole" else "$sign$whole.$fraction"
 }
 
+/** US dollars to the cent, as `$4.12`, or `< $0.01` for a little more than nothing. */
+fun usd(value: Double): String {
+    if (value > 0 && value < 0.005) return "< $0.01"
+    val cents = (value * 100).roundToLong()
+    return "$${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
+}
+
 /** A byte count in the largest unit that keeps it at least 1, as `512 MB` or `1.2 GB`. */
 fun bytes(value: Double): String {
     val units = listOf("B", "KB", "MB", "GB", "TB")
