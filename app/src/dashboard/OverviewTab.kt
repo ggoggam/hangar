@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -194,14 +195,16 @@ private fun MetricsGrid(m: FlyAppMetrics) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Metric(
                 stringResource(Res.string.metrics_cpu),
-                m.cpuPercent.lastOrNull()?.let { "${decimal(it.value)}%" } ?: noData,
+                m.cpuPercent.lastOrNull()?.let { "${decimal(it.value)}%" },
+                noData,
                 null,
                 m.cpuPercent,
                 Modifier.weight(1f),
             )
             Metric(
                 stringResource(Res.string.metrics_memory),
-                m.memoryBytes.lastOrNull()?.let { bytes(it.value) } ?: noData,
+                m.memoryBytes.lastOrNull()?.let { bytes(it.value) },
+                noData,
                 total?.let { stringResource(Res.string.metrics_memory_of, bytes(it)) },
                 m.memoryBytes,
                 Modifier.weight(1f),
@@ -210,7 +213,8 @@ private fun MetricsGrid(m: FlyAppMetrics) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Metric(
                 stringResource(Res.string.metrics_requests),
-                m.requestsPerMinute.lastOrNull()?.let { "${decimal(it.value)}/min" } ?: noTraffic,
+                m.requestsPerMinute.lastOrNull()?.let { "${decimal(it.value)}/min" },
+                noTraffic,
                 if (errors > 0) stringResource(Res.string.metrics_errors, decimal(errors)) else null,
                 m.requestsPerMinute,
                 Modifier.weight(1f),
@@ -218,7 +222,8 @@ private fun MetricsGrid(m: FlyAppMetrics) {
             )
             Metric(
                 stringResource(Res.string.metrics_latency),
-                m.p95Millis.lastOrNull()?.let { millis(it.value) } ?: noTraffic,
+                m.p95Millis.lastOrNull()?.let { millis(it.value) },
+                noTraffic,
                 null,
                 m.p95Millis,
                 Modifier.weight(1f),
@@ -230,7 +235,8 @@ private fun MetricsGrid(m: FlyAppMetrics) {
 @Composable
 private fun Metric(
     label: String,
-    value: String,
+    value: String?,
+    empty: String,
     detail: String?,
     points: List<FlyPoint>,
     modifier: Modifier,
@@ -238,7 +244,14 @@ private fun Metric(
 ) {
     Panel(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1)
+        // Muted when there's no figure, so "No traffic" doesn't look like one. Tabular figures keep
+        // the digits from shifting as the numbers refresh.
+        Text(
+            value ?: empty,
+            style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+            color = if (value == null) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
+            maxLines = 1,
+        )
         Text(
             detail.orEmpty(),
             style = MaterialTheme.typography.bodySmall,

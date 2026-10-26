@@ -118,3 +118,8 @@ privacy rules every change has to keep. Report security problems privately, as
 ## License
 
 MIT. Fly.io is a trademark of Fly.io, Inc.; this project isn't endorsed by them.
+
+The font ships in the app rather than loading from the web. Hangar Sans is Pretendard (Kil
+Hyung-jin) cut down to common Hangul, under the SIL Open Font License 1.1, which reserves
+Pretendard's name, so it's renamed. `fonts/build.py` makes it from the pinned upstream release
+(`mise run fonts`), and the licence ships in `app/composeResources/files/licenses`.

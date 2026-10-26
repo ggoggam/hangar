@@ -56,7 +56,7 @@ fun LoginScreen(vm: LoginViewModel) {
         verticalArrangement = Arrangement.Center,
     ) {
         Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(Res.string.app_name), style = MaterialTheme.typography.headlineLarge)
+            Text(stringResource(Res.string.app_name), style = MaterialTheme.typography.displayLarge)
             Text(
                 stringResource(Res.string.login_tagline),
                 style = MaterialTheme.typography.bodyMedium,

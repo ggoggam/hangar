@@ -1,12 +1,15 @@
 # Built with the Kotlin Toolchain, not Gradle. The committed ./kotlin wrapper pins the toolchain
-# and provisions its own JDK, so the tools here are only for the style hooks. Xcode is the one
-# prerequisite the wrapper can't provision, and only the iOS tasks need it. The JDK ktlint wants on
-# a CI runner is in mise.ci.toml, which mise merges over this file only when MISE_ENV=ci.
+# and provisions its own JDK, so the tools here are only for the style hooks and the font build.
+# Xcode is the one prerequisite the wrapper can't provision, and only the iOS tasks need it. The
+# JDK ktlint wants on a CI runner is in mise.ci.toml, which mise merges over this file only when
+# MISE_ENV=ci.
 [tools]
 ktlint = "latest"
 # The `pre-commit` task shells out to prek, so it is declared here rather than assumed present:
 # `mise install` in a fresh clone should be enough to run the hooks.
 prek = "latest"
+# Runs fonts/build.py with its pinned fontTools; only the `fonts` task needs it.
+uv = "latest"
 
 # ── Build and test ─────────────────────────────────────────────────────────────
 
@@ -229,6 +232,12 @@ echo "simulator $udid"
 [tasks.clean]
 description = "Delete build outputs (needed after manifest-only edits)"
 run = "./kotlin clean"
+
+# ── Fonts ──────────────────────────────────────────────────────────────────────
+
+[tasks.fonts]
+description = "Rebuild the bundled font from its pinned upstream release"
+run = "uv run fonts/build.py"
 
 # ── Style ──────────────────────────────────────────────────────────────────────
 
