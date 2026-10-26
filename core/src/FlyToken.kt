@@ -80,6 +80,12 @@ class FlyToken(
     /** For the Machines API, which wants only the macaroons when there are any. */
     val machinesHeader: String get() = scheme() + (macaroons.ifEmpty { userTokens }).joinToString(",")
 
+    /**
+     * For flyctl's "ui-ex" endpoints under api.fly.io/api/v1, such as `fly mpg list`'s: every token,
+     * always under `Bearer`, as flyctl sends `"Bearer " + Tokens.GraphQL()` there.
+     */
+    val uiexHeader: String get() = "Bearer " + (macaroons + userTokens).joinToString(",")
+
     private fun scheme() = if (macaroons.isEmpty()) "Bearer " else "FlyV1 "
 
     override fun equals(other: Any?): Boolean = other is FlyToken && other.value == value

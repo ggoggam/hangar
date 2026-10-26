@@ -94,4 +94,30 @@ class FlyMachinesTest {
             val e = assertFailsWith<FlyApiException.Failed> { api.machines("web") }
             assertEquals("HTTP 404: app not found", e.message)
         }
+
+    @Test
+    fun listsRegionsWithoutDeprecatedOnes() =
+        runTest {
+            // Region fields as Fly.io sends them; the list's key is capitalized and the nearest's isn't.
+            val fly =
+                MockFly(
+                    HttpStatusCode.OK to
+                        """{"Regions":[
+                            {"code":"nrt","name":"Tokyo, Japan","gateway_available":true,"mpg_available":true,"requires_paid_plan":false,"geo_region":"asia_pacific","deprecated":false,"capacity":1},
+                            {"code":"ams","name":"Amsterdam, Netherlands","mpg_available":false,"geo_region":"europe","deprecated":false},
+                            {"code":"old","name":"Gone","geo_region":"europe","deprecated":true}],"nearest":"nrt"}""",
+                )
+
+            val regions = FlyMachines(fly.http, MIXED_TOKEN, "https://m.test").regions()
+
+            assertEquals(listOf("ams", "nrt"), regions.regions.map { it.code })
+            assertEquals("nrt", regions.nearest)
+            assertEquals(listOf(false, true), regions.regions.map { it.mpgAvailable })
+            assertEquals(
+                "/v1/platform/regions",
+                fly.requests
+                    .single()
+                    .url.encodedPath,
+            )
+        }
 }

@@ -10,23 +10,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.ExternalLink
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.TriangleAlert
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.ui.Sparkline
@@ -39,17 +46,21 @@ import dev.ggoggam.hangar.app.ui.millis
 import dev.ggoggam.hangar.core.FlyAppDetail
 import dev.ggoggam.hangar.core.FlyAppMetrics
 import dev.ggoggam.hangar.core.FlyCertificate
+import dev.ggoggam.hangar.core.FlyHostIssue
 import dev.ggoggam.hangar.core.FlyIp
 import dev.ggoggam.hangar.core.FlyIpType
 import dev.ggoggam.hangar.core.FlyMachine
 import dev.ggoggam.hangar.core.FlyPoint
 import dev.ggoggam.hangar.core.FlyVolume
+import dev.ggoggam.hangar.core.grafanaUrl
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.overview(
     state: DashboardState,
     onWindow: (MetricsWindow) -> Unit,
 ) {
+    // Only when there are some: a quiet app shouldn't carry an empty warning, or a failed one.
+    state.hostIssues.value?.let { issues -> items(issues, key = { "host:${it.internalId}" }) { HostIssueCard(it) } }
     section(state.app, "app") { app -> item(key = "app") { AppCard(app, state.machines.value) } }
 
     item(key = "metrics:title") {
@@ -63,6 +74,9 @@ internal fun LazyListScope.overview(
         }
     }
     section(state.metrics, "metrics") { metrics -> item(key = "metrics") { MetricsGrid(metrics) } }
+    state.app.value
+        ?.let(::grafanaUrl)
+        ?.let { url -> item(key = "metrics:grafana") { GrafanaLink(url) } }
 
     section(state.volumes, "volumes") { volumes ->
         if (volumes.isNotEmpty()) {
@@ -98,6 +112,35 @@ internal fun Panel(
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) { content() }
+}
+
+/** A host problem under some of the app's machines, which `fly incidents hosts list` shows. */
+@Composable
+private fun HostIssueCard(issue: FlyHostIssue) {
+    Panel {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Lucide.TriangleAlert, contentDescription = null, tint = LocalStatusColors.current.warning, modifier = Modifier.size(18.dp))
+            StatusBadge(stringResource(Res.string.host_issue), Tone.Warning)
+        }
+        Text(issue.message, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            stringResource(Res.string.host_issue_updated, ago(issue.updatedAt ?: issue.createdAt)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The app's board on fly-metrics.net, opened in the browser as `fly dashboard metrics --grafana` does. */
+@Composable
+private fun GrafanaLink(url: String) {
+    val uri = LocalUriHandler.current
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        TextButton(onClick = { uri.openUri(url) }) {
+            Text(stringResource(Res.string.metrics_grafana))
+            Icon(Lucide.ExternalLink, contentDescription = null, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+        }
+    }
 }
 
 @Composable

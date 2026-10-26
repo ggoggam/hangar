@@ -7,6 +7,7 @@ import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyAppDetail
 import dev.ggoggam.hangar.core.FlyAppMetrics
 import dev.ggoggam.hangar.core.FlyCertificate
+import dev.ggoggam.hangar.core.FlyHostIssue
 import dev.ggoggam.hangar.core.FlyIp
 import dev.ggoggam.hangar.core.FlyLogEntry
 import dev.ggoggam.hangar.core.FlyLogs
@@ -19,6 +20,7 @@ import dev.ggoggam.hangar.core.FlyToken
 import dev.ggoggam.hangar.core.FlyVolume
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,32 @@ sealed interface Load<out T> {
 
 val <T> Load<T>.value: T? get() = (this as? Load.Ready)?.value
 
+/**
+ * Runs [fetch] with [session]'s token and stores its result in [state] with [set]. A failed reload
+ * keeps what was already shown, and a session that's over changes nothing, since the login screen
+ * is up.
+ */
+internal fun <S, T> CoroutineScope.loadInto(
+    state: MutableStateFlow<S>,
+    session: FlySession,
+    fetch: suspend (FlyToken) -> T,
+    get: (S) -> Load<T>,
+    set: (S, Load<T>) -> S,
+): Job =
+    launch {
+        val result =
+            try {
+                Load.Ready(session.authorized(fetch))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: FlyApiException.Unauthorized) {
+                return@launch
+            } catch (e: Exception) {
+                Load.Failed
+            }
+        state.update { s -> if (result is Load.Failed && get(s) is Load.Ready) s else set(s, result) }
+    }
+
 enum class MetricsWindow(
     val seconds: Long,
 ) {
@@ -51,6 +79,7 @@ enum class MetricsWindow(
 
 data class DashboardState(
     val app: Load<FlyAppDetail> = Load.Loading,
+    val hostIssues: Load<List<FlyHostIssue>> = Load.Loading,
     val machines: Load<List<FlyMachine>> = Load.Loading,
     val releases: Load<List<FlyRelease>> = Load.Loading,
     val volumes: Load<List<FlyVolume>> = Load.Loading,
@@ -68,7 +97,10 @@ data class LogsState(
     val failing: Boolean = false,
 )
 
-/** One app's dashboard: `fly status`, `fly machines list`, `fly releases` and `fly logs` in one place. */
+/**
+ * One app's dashboard: `fly status`, `fly incidents hosts list`, `fly machines list`, `fly releases`
+ * and `fly logs` in one place.
+ */
 class AppDashboardViewModel(
     val appName: String,
     private val org: String,
@@ -103,6 +135,7 @@ class AppDashboardViewModel(
     private fun loadAll(): List<Job> =
         listOf(
             load({ FlyApi(http, it).app(appName) }, { it.app }) { s, v -> s.copy(app = v) },
+            load({ FlyApi(http, it).hostIssues(appName) }, { it.hostIssues }) { s, v -> s.copy(hostIssues = v) },
             load({ FlyMachines(http, it).machines(appName) }, { it.machines }) { s, v -> s.copy(machines = v) },
             load({ FlyApi(http, it).releases(appName) }, { it.releases }) { s, v -> s.copy(releases = v) },
             load({ FlyMachines(http, it).volumes(appName) }, { it.volumes }) { s, v -> s.copy(volumes = v) },
@@ -129,25 +162,11 @@ class AppDashboardViewModel(
         }.also { metricsJob = it }
     }
 
-    /** Runs [fetch] and stores its result with [set]; a failed reload keeps what was already shown. */
     private fun <T> load(
         fetch: suspend (FlyToken) -> T,
         get: (DashboardState) -> Load<T>,
         set: (DashboardState, Load<T>) -> DashboardState,
-    ) = viewModelScope.launch {
-        val result =
-            try {
-                Load.Ready(session.authorized(fetch))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: FlyApiException.Unauthorized) {
-                // Signed out, and the login screen is up.
-                return@launch
-            } catch (e: Exception) {
-                Load.Failed
-            }
-        _state.update { s -> if (result is Load.Failed && get(s) is Load.Ready) s else set(s, result) }
-    }
+    ) = viewModelScope.loadInto(_state, session, fetch, get, set)
 
     /** Narrows the logs to one machine, or all of them for null, starting over from the latest. */
     fun setLogInstance(instance: String?) {
