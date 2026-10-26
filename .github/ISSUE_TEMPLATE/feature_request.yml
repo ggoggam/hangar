@@ -1,0 +1,42 @@
+name: Feature request
+description: Something Hangar could show or do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hangar is a read-only monitor today: it shows what `fly status`, `fly machines list`,
+        `fly releases` and `fly logs` show, and doesn't change anything. Requests that would act on
+        your apps (restart, scale, deploy) are welcome, but expect a discussion first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The situation that brought you here, such as "I want to know when a machine restarts".
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like Hangar to do
+    validations:
+      required: true
+  - type: input
+    id: flyctl
+    attributes:
+      label: The flyctl command or Fly.io API behind it, if you know
+      placeholder: fly checks list, GET /v1/apps/{app}/machines/{id}/events, ...
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - Both
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else
+      description: Workarounds you use today, screenshots of how flyctl or the dashboard shows it, and so on.

@@ -1,6 +1,7 @@
 package dev.ggoggam.hangar.core
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.request.HttpRequestBuilder
@@ -19,15 +20,21 @@ const val FLY_API_URL = "https://api.fly.io"
 /** The Machines API (flyctl's "flaps"), which also serves volumes, IPs and certificates. */
 const val FLY_MACHINES_URL = "https://api.machines.dev"
 
-/** The HTTP client every Fly.io call goes through, on the platform's engine (OkHttp, Darwin). */
+/**
+ * The HTTP client every Fly.io call goes through, on the platform's engine (OkHttp, Darwin), with
+ * no response cache: logs, machines and the rest stay in memory, never on disk.
+ */
 fun flyHttpClient(): HttpClient =
-    HttpClient {
+    platformHttpClient {
         install(UserAgent) { agent = "hangar/0.1 (unofficial Fly.io client)" }
         install(HttpTimeout) {
             connectTimeoutMillis = 15_000
             requestTimeoutMillis = 30_000
         }
     }
+
+/** An HTTP client on this platform's engine, configured not to cache responses. */
+internal expect fun platformHttpClient(config: HttpClientConfig<*>.() -> Unit): HttpClient
 
 internal val FlyJson =
     Json {

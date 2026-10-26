@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Hangar doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste a Fly.io token or the output of `fly auth token`**, including in logs or
+        screenshots. If one slips in, revoke it on fly.io straight away. Redact your email and app
+        names if you'd rather not share them; they're rarely needed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in with the browser
+        2. Open an app's Logs tab
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android
+        - iOS
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: Galaxy A23, Android 14 / iPhone 15, iOS 26.1 / iOS simulator
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Hangar version or commit
+      placeholder: 0.1.0, or the commit you built from
+  - type: dropdown
+    id: signin
+    attributes:
+      label: How you signed in
+      options:
+        - Browser sign-in (Sign in with Fly.io)
+        - Pasted access token (fly tokens create ...)
+        - Pasted fly auth token
+        - Doesn't matter / not signed in
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Logcat or the Xcode console, if you have them. Check them for tokens first.
+      render: text

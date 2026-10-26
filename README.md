@@ -3,6 +3,10 @@
 An unofficial mobile client for watching Fly.io apps, on Android and iOS. Not made by or
 affiliated with Fly.io.
 
+Hangar talks to Fly.io and nothing else. It doesn't collect, intercept or pass on any personally
+identifiable information, and it's open source so that you can check that for yourself rather
+than take it on trust: see [Privacy](#privacy).
+
 Built with the [Kotlin Toolchain](https://github.com/JetBrains/amper): `./kotlin` pins the
 toolchain and its JDK, so a clone builds with nothing else installed except Xcode for iOS.
 `mise run` lists the tasks (`test`, `test:ios`, `build:android`, `build:ios`, `dev:android`,
@@ -72,6 +76,36 @@ the ones flyctl and fly-go make:
 
 Everything except GraphQL takes `FlyV1` with only the macaroons (`FlyToken.machinesHeader`). An
 OAuth-only `Bearer` token gets a 401 there.
+
+## Privacy
+
+The app is a thin client between you and Fly.io's API. It has no server of its own, and no
+analytics, crash reporting, ads or other third-party SDKs (the dependencies are in
+`libs.versions.toml`).
+
+- **Where it connects.** Only `api.fly.io` (login, GraphQL, logs, metrics) and
+  `api.machines.dev` (machines, volumes, IPs, certificates), both set in `core/src/FlyHttp.kt`.
+  Renewing a token's auth discharge goes to the third party the token names, and
+  `FlyDischarges` refuses any host but `api.fly.io` and `auth.fly.io`, so your OAuth token can't
+  be sent anywhere else. On Android the only permission it asks for is `INTERNET`.
+- **What it sends.** Your Fly.io token, to Fly.io. When you sign in, a name for the login
+  ("Hangar on SM-A235F", "Hangar on iPhone"), which Fly.io shows on its approval page and in your
+  token list. That's the device model, never the name you gave the phone or any device
+  identifier. Every request carries the User-Agent `hangar/0.1 (unofficial Fly.io client)`.
+- **What it sees.** Your password and your Google or GitHub sign-in never reach the app: you
+  sign in on fly.io in the system's sign-in browser (Custom Tabs, ASWebAuthenticationSession),
+  and the app only gets the code Fly.io shows afterwards.
+- **What it keeps.** Only the token, on the device: sealed under an Android Keystore key and
+  excluded from backups (`allowBackup="false"`), or in the iOS Keychain for this device only.
+  Signing out deletes it. Your email, apps, logs and metrics are held in memory while they're on
+  screen: the app never writes them to disk, logs them or sends them anywhere. Its HTTP clients
+  keep no response cache and no cookies (`core/src@android`, `core/src@ios`).
+
+## Contributing
+
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), including the
+privacy rules every change has to keep. Report security problems privately, as
+[SECURITY.md](SECURITY.md) describes.
 
 ## License
 
