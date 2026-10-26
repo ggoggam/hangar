@@ -1,10 +1,12 @@
 package dev.ggoggam.hangar.app.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -160,10 +162,7 @@ private fun LogLines(
             }
         }
         // Programmatic scrolls count as scrolling, so reaching the end this way follows again.
-        Column(
-            Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)) {
             ScrollButton(list.canScrollBackward, Lucide.ArrowUp, stringResource(Res.string.logs_to_top)) {
                 scope.launch { list.animateScrollToItem(0) }
             }
@@ -182,8 +181,14 @@ private fun ScrollButton(
     label: String,
     onClick: () -> Unit,
 ) {
-    AnimatedVisibility(visible, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
-        SmallFloatingActionButton(onClick) { Icon(icon, contentDescription = label) }
+    // Growing and shrinking the slot, gap included, glides the other button into place rather than
+    // leaving it to jump once this one has faded out.
+    AnimatedVisibility(
+        visible,
+        enter = fadeIn() + scaleIn() + expandVertically(clip = false),
+        exit = fadeOut() + scaleOut() + shrinkVertically(clip = false),
+    ) {
+        SmallFloatingActionButton(onClick, Modifier.padding(top = 8.dp)) { Icon(icon, contentDescription = label) }
     }
 }
 
