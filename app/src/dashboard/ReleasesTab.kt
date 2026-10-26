@@ -22,7 +22,7 @@ import dev.ggoggam.hangar.core.FlyRelease
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.releases(releases: Load<List<FlyRelease>>) {
-    section(releases, "releases") { list ->
+    section(releases, "releases", placeholders = 3) { list ->
         if (list.isEmpty()) item(key = "releases:empty") { Muted(stringResource(Res.string.releases_empty)) }
         items(list, key = { "release:${it.id.ifEmpty { it.version.toString() }}" }) { ReleaseRow(it) }
     }

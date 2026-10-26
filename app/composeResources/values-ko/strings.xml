@@ -18,6 +18,8 @@
     <string name="error_network">Fly.io에 연결할 수 없습니다. 인터넷 연결을 확인하세요.</string>
     <string name="apps_title">앱</string>
     <string name="apps_sign_out">로그아웃</string>
+    <string name="apps_menu">옵션 더보기</string>
+    <string name="apps_dark_mode">다크 모드</string>
     <string name="apps_empty">아직 조직에 앱이 없습니다.</string>
     <string name="apps_failed">앱 목록을 불러오지 못했습니다.</string>
     <string name="apps_retry">다시 시도</string>

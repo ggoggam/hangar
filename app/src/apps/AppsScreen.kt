@@ -1,6 +1,7 @@
 package dev.ggoggam.hangar.app.apps
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,29 +14,40 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Moon
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
 import dev.ggoggam.hangar.core.FlyApp
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +67,7 @@ fun AppsScreen(
                         }
                     }
                 },
-                actions = { TextButton(onClick = vm::signOut) { Text(stringResource(Res.string.apps_sign_out)) } },
+                actions = { AppsMenu(onSignOut = vm::signOut) },
             )
         },
     ) { padding ->
@@ -82,6 +94,35 @@ fun AppsScreen(
                     AppList(apps, onOpen)
                 }
             }
+        }
+    }
+}
+
+/** The overflow menu: the theme switch and signing out. */
+@Composable
+private fun AppsMenu(onSignOut: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val theme = koinInject<ThemeSettings>()
+    val dark = theme.dark.collectAsStateWithLifecycle().value ?: isSystemInDarkTheme()
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Lucide.EllipsisVertical, stringResource(Res.string.apps_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.apps_dark_mode)) },
+                leadingIcon = { Icon(Lucide.Moon, contentDescription = null, Modifier.size(18.dp)) },
+                // The whole row toggles; the switch only shows the state.
+                trailingIcon = { Switch(checked = dark, onCheckedChange = null) },
+                onClick = { theme.setDark(!dark) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.apps_sign_out)) },
+                leadingIcon = { Icon(Lucide.LogOut, contentDescription = null, Modifier.size(18.dp)) },
+                onClick = {
+                    open = false
+                    onSignOut()
+                },
+            )
         }
     }
 }
