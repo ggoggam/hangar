@@ -120,7 +120,9 @@ def main():
 
     LICENSES.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(pretendard) as z:
-        (LICENSES / "pretendard.txt").write_bytes(z.read("LICENSE.txt"))
+        # Without the upstream copy's trailing spaces, which the whitespace hook would strip anyway.
+        licence = z.read("LICENSE.txt").decode()
+        (LICENSES / "pretendard.txt").write_text("".join(line.rstrip() + "\n" for line in licence.splitlines()))
 
     for path in sorted(FONTS.iterdir()):
         print(f"{path.relative_to(ROOT)}  {path.stat().st_size // 1024} KB")
