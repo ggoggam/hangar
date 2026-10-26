@@ -3,6 +3,7 @@ package dev.ggoggam.hangar.app.session
 import android.content.Context
 import android.os.Build
 import dev.ggoggam.hangar.app.di.SESSION_NAME
+import dev.ggoggam.hangar.core.TokenStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
 

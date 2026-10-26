@@ -2,7 +2,6 @@ package dev.ggoggam.hangar.app.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.ggoggam.hangar.app.session.Session
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyAppDetail
@@ -15,6 +14,7 @@ import dev.ggoggam.hangar.core.FlyMachine
 import dev.ggoggam.hangar.core.FlyMachines
 import dev.ggoggam.hangar.core.FlyMetrics
 import dev.ggoggam.hangar.core.FlyRelease
+import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyToken
 import dev.ggoggam.hangar.core.FlyVolume
 import io.ktor.client.HttpClient
@@ -73,7 +73,7 @@ class AppDashboardViewModel(
     val appName: String,
     private val org: String,
     private val http: HttpClient,
-    private val session: Session,
+    private val session: FlySession,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DashboardState())
     val state: StateFlow<DashboardState> = _state.asStateFlow()
@@ -93,42 +93,35 @@ class AppDashboardViewModel(
         if (session.token.value == null) return
         if (!quiet) _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
-            val token = session.fresh()
-            if (token == null) {
-                _state.update { it.copy(refreshing = false) }
-                return@launch
-            }
-            loadAll(token).forEach { it.join() }
+            loadAll().forEach { it.join() }
             _state.update { it.copy(refreshing = false) }
         }
     }
 
-    private fun loadAll(token: FlyToken): List<Job> {
-        val api = FlyApi(http, token)
-        val machines = FlyMachines(http, token)
-        return listOf(
-            load({ api.app(appName) }, { it.app }) { s, v -> s.copy(app = v) },
-            load({ machines.machines(appName) }, { it.machines }) { s, v -> s.copy(machines = v) },
-            load({ api.releases(appName) }, { it.releases }) { s, v -> s.copy(releases = v) },
-            load({ machines.volumes(appName) }, { it.volumes }) { s, v -> s.copy(volumes = v) },
-            load({ machines.ips(appName) }, { it.ips }) { s, v -> s.copy(ips = v) },
-            load({ machines.certificates(appName) }, { it.certificates }) { s, v -> s.copy(certificates = v) },
-            loadMetrics(token),
+    /** Every section at once; the session renews the token once for all of them when it's due. */
+    private fun loadAll(): List<Job> =
+        listOf(
+            load({ FlyApi(http, it).app(appName) }, { it.app }) { s, v -> s.copy(app = v) },
+            load({ FlyMachines(http, it).machines(appName) }, { it.machines }) { s, v -> s.copy(machines = v) },
+            load({ FlyApi(http, it).releases(appName) }, { it.releases }) { s, v -> s.copy(releases = v) },
+            load({ FlyMachines(http, it).volumes(appName) }, { it.volumes }) { s, v -> s.copy(volumes = v) },
+            load({ FlyMachines(http, it).ips(appName) }, { it.ips }) { s, v -> s.copy(ips = v) },
+            load({ FlyMachines(http, it).certificates(appName) }, { it.certificates }) { s, v -> s.copy(certificates = v) },
+            loadMetrics(),
         )
-    }
 
     fun setWindow(window: MetricsWindow) {
         if (window == _state.value.window) return
         _state.update { it.copy(window = window, metrics = Load.Loading) }
-        viewModelScope.launch { session.fresh()?.let { loadMetrics(it) } }
+        loadMetrics()
     }
 
     /** Loads the metrics for the current window, dropping a load still running for another one. */
-    private fun loadMetrics(token: FlyToken): Job {
+    private fun loadMetrics(): Job {
         val window = _state.value.window
         metricsJob?.cancel()
         return load(
-            { FlyMetrics(http, token).dashboard(org, appName, Clock.System.now().epochSeconds, window.seconds) },
+            { FlyMetrics(http, it).dashboard(org, appName, Clock.System.now().epochSeconds, window.seconds) },
             { it.metrics },
         ) { s, v ->
             s.copy(metrics = v)
@@ -137,17 +130,17 @@ class AppDashboardViewModel(
 
     /** Runs [fetch] and stores its result with [set]; a failed reload keeps what was already shown. */
     private fun <T> load(
-        fetch: suspend () -> T,
+        fetch: suspend (FlyToken) -> T,
         get: (DashboardState) -> Load<T>,
         set: (DashboardState, Load<T>) -> DashboardState,
     ) = viewModelScope.launch {
         val result =
             try {
-                Load.Ready(fetch())
+                Load.Ready(session.authorized(fetch))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: FlyApiException.Unauthorized) {
-                session.signOut()
+                // Signed out, and the login screen is up.
                 return@launch
             } catch (e: Exception) {
                 Load.Failed
@@ -171,8 +164,7 @@ class AppDashboardViewModel(
         while (true) {
             val instance = _logs.value.instance
             try {
-                val token = session.fresh() ?: return
-                val page = FlyLogs(http, token).page(appName, logCursor, instance)
+                val page = session.authorized { FlyLogs(http, it).page(appName, logCursor, instance) }
                 if (instance != _logs.value.instance) continue
                 logCursor = page.cursor
                 _logs.update { s ->
@@ -190,7 +182,6 @@ class AppDashboardViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: FlyApiException.Unauthorized) {
-                session.signOut()
                 return
             } catch (e: Exception) {
                 _logs.update { it.copy(failing = true) }

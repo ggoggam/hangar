@@ -48,10 +48,17 @@ User tokens expire in minutes unless renewed. A token from `fly auth login` is a
 macaroon with a third-party caveat for `https://api.fly.io/aaa/v1`, plus a discharge for that
 caveat and an OAuth token (`fo1_`). The discharge lasts 10 minutes. Before most commands, flyctl
 posts the caveat's ticket to `<third party>/.well-known/macfly/3p` with `Bearer <fo1 token>`,
-which is superfly/macaroon's `tp` protocol, and swaps in the new discharge. `Session.fresh()`
-does the same before every call and stores the result (`FlyDischarges`, `MacaroonInfo`). It
-sends the OAuth token only to api.fly.io and auth.fly.io. If Fly.io wants the user in a browser
-for a discharge, or rejects the OAuth token, the app signs out.
+which is superfly/macaroon's `tp` protocol, and swaps in the new discharge. `FlySession` does
+the same before every call and stores the result (`FlyDischarges`, `MacaroonInfo`). It sends the
+OAuth token only to api.fly.io and auth.fly.io. If Fly.io wants the user in a browser for a
+discharge, or rejects the OAuth token, the app signs out.
+
+Calls go out several at a time, so renewal is single-flight: the first call that finds the
+discharge due starts it, and the rest wait for the same outcome rather than each asking Fly.io.
+A call that Fly.io turns down with a 401 forces a renewal even when the discharge looks good,
+since the phone's clock may be off, and runs once more. The app only signs out when the renewed
+token is turned down too, and only if it's still the signed-in one, so a late 401 for an old
+token can't sign out a newer one.
 
 Pasting a token also works, for anyone who would rather give the app a read-only one
 (`fly tokens create readonly <org>`) than a full login.
