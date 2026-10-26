@@ -89,7 +89,15 @@ The bottom bar switches between the app list and three more screens:
 | Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). |
 | Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
 
-The Fly.io dashboard's usage and billing pages have no flyctl command, so Hangar doesn't show them.
+The app list opens with an estimate of each organization's usage over the last 14 days, and each
+app's share under its name. Neither flyctl nor Fly.io's API reports bills, so Hangar works it out
+(`core/src/FlyUsage.kt`) from Fly.io's Prometheus, where its metrics go back about 15 days: how
+long each Machine ran at its size and region (`fly_instance_info`, counted each minute), what each
+app sent out by edge region (`fly_edge_data_out`), and its volumes from `api.machines.dev`. Those
+are priced with `FlyPrices`, a copy of the per-second rates, region markups and data transfer
+prices on docs.fly.io/about/pricing as of 2026-10-26. It's an estimate: it leaves out dedicated
+IPv4 addresses, stopped Machines' storage, Managed Postgres, Redis and Tigris, discounts and credits,
+and it goes stale when Fly.io changes its prices, so update `FlyPrices` when they do.
 
 Everything except GraphQL takes `FlyV1` with only the macaroons (`FlyToken.machinesHeader`). An
 OAuth-only `Bearer` token gets a 401 there. The older Managed Postgres list is the exception: like

@@ -57,6 +57,29 @@ class FlyMetrics(
         stepSeconds: Long,
     ): List<FlyPoint> = range(org, query, startSeconds, endSeconds, stepSeconds).firstOrNull()?.points.orEmpty()
 
+    /** A PromQL instant query at [timeSeconds]: one value per label set, skipping ones that aren't numbers. */
+    suspend fun instant(
+        org: String,
+        query: String,
+        timeSeconds: Long,
+    ): List<FlySample> {
+        val body =
+            http.getJson<PromResponse>("$apiUrl/prometheus/$org/api/v1/query", token.machinesHeader) {
+                parameter("query", query)
+                parameter("time", timeSeconds)
+            }
+        if (body.status != "success") throw FlyApiException.Failed(body.error ?: body.status)
+        return body.data?.result.orEmpty().mapNotNull { series ->
+            val value =
+                series.value
+                    ?.getOrNull(1)
+                    ?.jsonPrimitive
+                    ?.content
+                    ?.toDoubleOrNull()
+            if (value == null || value.isNaN() || value.isInfinite()) null else FlySample(series.metric, value)
+        }
+    }
+
     /** A PromQL range query: one series per label set. */
     suspend fun range(
         org: String,
@@ -114,6 +137,12 @@ class FlySeries(
     val points: List<FlyPoint>,
 )
 
+/** One label set's value from an instant query. */
+class FlySample(
+    val labels: Map<String, String>,
+    val value: Double,
+)
+
 /** One sample: Unix seconds and its value. */
 data class FlyPoint(
     val time: Long,
@@ -136,4 +165,6 @@ private class PromData(
 private class PromSeries(
     val metric: Map<String, String> = emptyMap(),
     val values: List<JsonArray> = emptyList(),
+    /** An instant query's `[time, "value"]`. */
+    val value: JsonArray? = null,
 )
