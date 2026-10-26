@@ -15,6 +15,7 @@ mise run build:ios         # macOS
 mise run dev:android       # build, install and launch on a phone or emulator
 mise run dev:ios           # build, install and launch on an iPhone or simulator (macOS)
 mise run kt:fmt            # format with ktlint
+mise run fonts             # rebuild the bundled font from its pinned source
 mise run pre-commit        # what CI's pre-commit job runs
 ```
 

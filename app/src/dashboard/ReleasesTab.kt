@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ggoggam.hangar.app.generated.resources.*
@@ -32,7 +31,7 @@ internal fun LazyListScope.releases(releases: Load<List<FlyRelease>>) {
 private fun ReleaseRow(release: FlyRelease) {
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("v${release.version}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("v${release.version}", style = MaterialTheme.typography.titleMedium)
             Text(
                 release.description.ifEmpty { release.reason },
                 style = MaterialTheme.typography.bodyMedium,
