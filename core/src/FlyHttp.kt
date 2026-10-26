@@ -7,6 +7,7 @@ import io.ktor.client.plugins.UserAgent
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -19,6 +20,9 @@ const val FLY_API_URL = "https://api.fly.io"
 
 /** The Machines API (flyctl's "flaps"), which also serves volumes, IPs and certificates. */
 const val FLY_MACHINES_URL = "https://api.machines.dev"
+
+/** Fly.io's incident feed behind `fly incidents list`, an app of Fly.io's own (fly-incidents.fly.dev). */
+const val FLY_INCIDENTS_URL = "https://incidents.flyio.net"
 
 /**
  * The HTTP client every Fly.io call goes through, on the platform's engine (OkHttp, Darwin), with
@@ -42,17 +46,33 @@ internal val FlyJson =
         explicitNulls = false
     }
 
-/** GETs [url] with [authorization] and decodes the JSON body, mapping failures to [FlyApiException]. */
+/**
+ * GETs [url] with [authorization], or with no token for null, and decodes the JSON body, mapping
+ * failures to [FlyApiException].
+ */
 internal suspend inline fun <reified T> HttpClient.getJson(
     url: String,
-    authorization: String,
+    authorization: String?,
     crossinline params: HttpRequestBuilder.() -> Unit = {},
-): T {
-    val response =
+): T =
+    decodeJson(
         get(url) {
-            header(HttpHeaders.Authorization, authorization)
+            if (authorization != null) header(HttpHeaders.Authorization, authorization)
             params()
-        }
+        },
+    )
+
+/** As [getJson], but null for a 404: for endpoints Fly.io is still rolling out, which flyctl skips when they're missing. */
+internal suspend inline fun <reified T> HttpClient.getJsonOrNull(
+    url: String,
+    authorization: String?,
+): T? {
+    val response = get(url) { if (authorization != null) header(HttpHeaders.Authorization, authorization) }
+    return if (response.status == HttpStatusCode.NotFound) null else decodeJson(response)
+}
+
+/** [response]'s JSON body, or the [FlyApiException] for its status. */
+internal suspend inline fun <reified T> decodeJson(response: HttpResponse): T {
     val text = response.bodyAsText()
     when {
         response.status == HttpStatusCode.Unauthorized -> throw FlyApiException.Unauthorized()

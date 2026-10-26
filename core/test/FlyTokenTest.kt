@@ -25,6 +25,7 @@ class FlyTokenTest {
         val token = FlyToken("fo1_user, fm1r_read")
         assertEquals("FlyV1 fm1r_read,fo1_user", token.graphqlHeader)
         assertEquals("FlyV1 fm1r_read", token.machinesHeader)
+        assertEquals("Bearer fm1r_read,fo1_user", token.uiexHeader)
     }
 
     @Test

@@ -3,7 +3,12 @@ package dev.ggoggam.hangar.app.di
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.login.LoginViewModel
+import dev.ggoggam.hangar.app.settings.OrganizationViewModel
+import dev.ggoggam.hangar.app.settings.RegionsViewModel
+import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
+import dev.ggoggam.hangar.app.status.StatusViewModel
+import dev.ggoggam.hangar.app.storage.StorageViewModel
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyLogin
 import dev.ggoggam.hangar.core.FlySession
@@ -31,6 +36,11 @@ private val appModule =
         single { ThemeSettings(get()) }
         viewModel { LoginViewModel(get(), get(), get(), get(), get(SESSION_NAME)) }
         viewModel { AppsViewModel(get(), get()) }
+        viewModel { StatusViewModel(get()) }
+        viewModel { StorageViewModel(get(), get()) }
+        viewModel { SettingsViewModel(get(), get()) }
+        viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }
+        viewModel { RegionsViewModel(get(), get()) }
         viewModel { (app: String, org: String) -> AppDashboardViewModel(app, org, get(), get()) }
     }
 

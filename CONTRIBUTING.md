@@ -27,7 +27,7 @@ pull request.
 
 | Module | What goes there |
 |---|---|
-| `core` | Fly.io's APIs: login, tokens and discharges, GraphQL, Machines API, logs, metrics. Pure Kotlin, no UI and no user-facing strings. |
+| `core` | Fly.io's APIs: login, tokens and discharges, GraphQL, Machines API, Managed Postgres, logs, metrics, incidents. Pure Kotlin, no UI and no user-facing strings. |
 | `app` | Compose Multiplatform screens and view models, plus the platform services behind small interfaces (`src@android`, `src@ios`). |
 | `android-app`, `ios-app` | Entry points. The iOS Keychain and sign-in sheet are Swift bridges in `ios-app/src` that pass only strings. |
 

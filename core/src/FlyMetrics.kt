@@ -93,6 +93,13 @@ class FlyMetrics(
     }
 }
 
+/**
+ * The app's board on Fly.io's managed Grafana, the page `fly dashboard metrics --grafana` opens in
+ * the browser; null without the organization's number.
+ */
+fun grafanaUrl(app: FlyAppDetail): String? =
+    app.organization.internalNumericId?.let { "https://fly-metrics.net/d/fly-app/fly-app?orgId=$it&var-app=${app.name}" }
+
 class FlyAppMetrics(
     val cpuPercent: List<FlyPoint>,
     val memoryBytes: List<FlyPoint>,

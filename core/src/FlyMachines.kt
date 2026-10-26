@@ -34,6 +34,18 @@ class FlyMachines(
     suspend fun certificates(app: String): List<FlyCertificate> =
         http.getJson<Certificates>("$machinesUrl/v1/apps/$app/certificates", token.machinesHeader).certificates
 
+    /** Fly.io's regions, without deprecated ones, and the one nearest the caller, as `fly platform regions` lists them. */
+    suspend fun regions(): FlyRegions {
+        val data = http.getJson<RegionData>("$machinesUrl/v1/platform/regions", token.machinesHeader)
+        return FlyRegions(
+            data.regions
+                .orEmpty()
+                .filterNot { it.deprecated }
+                .sortedBy { it.name },
+            data.nearest,
+        )
+    }
+
     private companion object {
         // flyctl's volume list skips these.
         val GONE_VOLUME_STATES =
@@ -186,6 +198,30 @@ class FlyCertificate(
     /** `Ready` once issued; other values while Fly.io waits on DNS or the CA. */
     val status: String = "",
     val configured: Boolean = false,
+)
+
+class FlyRegions(
+    val regions: List<FlyRegion>,
+    /** The code of the region nearest the phone, as Fly.io's edge sees it. */
+    val nearest: String?,
+)
+
+@Serializable
+class FlyRegion(
+    val code: String,
+    val name: String = "",
+    /** `africa`, `asia_pacific`, `europe`, `north_america` or `south_america`. */
+    @SerialName("geo_region") val geoRegion: String = "",
+    @SerialName("mpg_available") val mpgAvailable: Boolean = false,
+    @SerialName("requires_paid_plan") val requiresPaidPlan: Boolean = false,
+    val deprecated: Boolean = false,
+)
+
+// fly-go's flaps.RegionData, whose keys are capitalized as Go's encoder left them, the nearest's aside.
+@Serializable
+private class RegionData(
+    @SerialName("Regions") val regions: List<FlyRegion>? = null,
+    @SerialName("nearest") val nearest: String? = null,
 )
 
 @Serializable

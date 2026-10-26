@@ -22,7 +22,7 @@ simulator, and builds both apps, all on GitHub-hosted runners.
 
 | Module | What it is |
 |---|---|
-| `core` | Fly.io's login, GraphQL, Machines API, logs and metrics clients on Ktor. Pure Kotlin, tested on the JVM in CI. |
+| `core` | Fly.io's login, GraphQL, Machines API, Managed Postgres, logs, metrics and incidents clients on Ktor. Pure Kotlin, tested on the JVM in CI. |
 | `app` | Compose Multiplatform UI and the platform services behind it: token storage, settings, the sign-in sheet. |
 | `android-app`, `ios-app` | Entry points. iOS's Keychain and ASWebAuthenticationSession are Swift bridges in `ios-app/src`. |
 
@@ -75,14 +75,25 @@ the ones flyctl and fly-go make:
 
 | Tab | Source |
 |---|---|
-| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`. |
-| Metrics | Fly.io's managed Prometheus: `api.fly.io/prometheus/{org}/api/v1/query_range` over 1, 6 or 24 hours, for CPU, memory, edge requests and errors per minute, and p95 latency. flyctl has no metrics command; these follow Fly.io's Grafana boards. |
+| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`. Host issues under the app's machines, when there are any, come from GraphQL `app.hostIssues` (fly-go's `GetAppHostIssues`, behind `fly incidents hosts list`). |
+| Metrics | Fly.io's managed Prometheus: `api.fly.io/prometheus/{org}/api/v1/query_range` over 1, 6 or 24 hours, for CPU, memory, edge requests and errors per minute, and p95 latency. flyctl has no metrics command; these follow Fly.io's Grafana boards. "Open in Grafana" opens the app's board on fly-metrics.net in the browser, the page `fly dashboard metrics --grafana` opens. |
 | Machines | `api.machines.dev/v1/apps/{app}/machines`, filtered the way `fly status` filters it: no destroyed, release-command or console machines, and no `bg_deployments_compat` checks. Each machine's config `env` is never decoded. |
 | Releases | GraphQL `releasesUnprocessed` (fly-go's `GetAppReleasesMachines`), the last 25. |
 | Logs | `api.fly.io/api/v1/apps/{app}/logs?next_token=&instance=`, polled the way `fly logs` polls when it can't use NATS: straight away while pages come back full, backing off to 4 seconds when quiet. JSON log lines are shown as their message plus `key=value` fields. |
 
+The bottom bar switches between the app list and three more screens:
+
+| Screen | Source |
+|---|---|
+| Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. The app list shows a banner while any incident is open, as flyctl warns before its commands. A link opens status.fly.io in the browser, as `fly platform status` does. |
+| Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). |
+| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
+
+The Fly.io dashboard's usage and billing pages have no flyctl command, so Hangar doesn't show them.
+
 Everything except GraphQL takes `FlyV1` with only the macaroons (`FlyToken.machinesHeader`). An
-OAuth-only `Bearer` token gets a 401 there.
+OAuth-only `Bearer` token gets a 401 there. The older Managed Postgres list is the exception: like
+flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
 
 ## Privacy
 
@@ -90,8 +101,11 @@ The app is a thin client between you and Fly.io's API. It has no server of its o
 analytics, crash reporting, ads or other third-party SDKs (the dependencies are in
 `libs.versions.toml`).
 
-- **Where it connects.** Only `api.fly.io` (login, GraphQL, logs, metrics) and
-  `api.machines.dev` (machines, volumes, IPs, certificates), both set in `core/src/FlyHttp.kt`.
+- **Where it connects.** Only `api.fly.io` (login, GraphQL, logs, metrics, Managed Postgres),
+  `api.machines.dev` (machines, volumes, IPs, certificates, Managed Postgres) and
+  `incidents.flyio.net` (Fly.io's incident feed, an app Fly.io runs on its own platform, called
+  with no token and nothing about you), all set in `core/src/FlyHttp.kt`. "Open in Grafana" and
+  "Open status.fly.io" hand a link to your browser; the app itself doesn't connect to either.
   Renewing a token's auth discharge goes to the third party the token names, and
   `FlyDischarges` refuses any host but `api.fly.io` and `auth.fly.io`, so your OAuth token can't
   be sent anywhere else. On Android the only permission it asks for is `INTERNET`.
