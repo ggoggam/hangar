@@ -1,7 +1,14 @@
 package dev.ggoggam.hangar.app.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,7 +22,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,9 +34,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -35,12 +50,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.composables.icons.lucide.ArrowDown
+import com.composables.icons.lucide.ArrowUp
+import com.composables.icons.lucide.Lucide
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.ui.clockTime
 import dev.ggoggam.hangar.app.ui.instantOf
+import dev.ggoggam.hangar.app.ui.plainTextClip
+import dev.ggoggam.hangar.app.ui.systemConfirmsCopy
 import dev.ggoggam.hangar.core.FlyLogEntry
 import dev.ggoggam.hangar.core.FlyMachine
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -111,22 +132,70 @@ private fun LogLines(
         if (follow && entries.isNotEmpty()) list.scrollToItem(entries.lastIndex)
     }
 
-    SelectionContainer {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            state = list,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            itemsIndexed(entries, key = { i, e -> e.id.ifEmpty { "line:$i" } }) { _, e -> LogLine(e, showInstance) }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val copied = stringResource(Res.string.logs_copied)
+    val copy = { entry: FlyLogEntry ->
+        scope.launch {
+            clipboard.setClipEntry(plainTextClip(asFlyLogs(entry)))
+            if (!systemConfirmsCopy) {
+                snackbar.currentSnackbarData?.dismiss()
+                snackbar.showSnackbar(copied)
+            }
         }
+        Unit
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // A tap copies the whole line; a long press still selects part of one.
+        SelectionContainer {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = list,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                itemsIndexed(entries, key = { i, e -> e.id.ifEmpty { "line:$i" } }) { _, e -> LogLine(e, showInstance) { copy(e) } }
+            }
+        }
+        // Programmatic scrolls count as scrolling, so reaching the end this way follows again.
+        Column(
+            Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ScrollButton(list.canScrollBackward, Lucide.ArrowUp, stringResource(Res.string.logs_to_top)) {
+                scope.launch { list.animateScrollToItem(0) }
+            }
+            ScrollButton(list.canScrollForward, Lucide.ArrowDown, stringResource(Res.string.logs_to_bottom)) {
+                scope.launch { list.animateScrollToItem(entries.lastIndex) }
+            }
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
 }
+
+@Composable
+private fun ScrollButton(
+    visible: Boolean,
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    AnimatedVisibility(visible, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()) {
+        SmallFloatingActionButton(onClick) { Icon(icon, contentDescription = label) }
+    }
+}
+
+/** [entry] the way `fly logs` prints it, with the message as it came rather than as shown. */
+private fun asFlyLogs(entry: FlyLogEntry): String =
+    "${entry.timestamp} app[${entry.instance}] ${entry.region} [${entry.level}] ${entry.message}"
 
 @Composable
 private fun LogLine(
     entry: FlyLogEntry,
     showInstance: Boolean,
+    onCopy: () -> Unit,
 ) {
     val colors = LocalStatusColors.current
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -149,7 +218,12 @@ private fun LogLine(
             withStyle(SpanStyle(color = messageColor)) { append(line.message) }
             if (line.fields.isNotEmpty()) withStyle(SpanStyle(color = muted)) { append("  ${line.fields}") }
         }
-    Text(text, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = stringResource(Res.string.logs_copy), onClick = onCopy),
+    )
 }
 
 private class ReadableLine(

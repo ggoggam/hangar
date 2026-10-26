@@ -72,6 +72,10 @@
     <string name="release_stable">stable</string>
     <string name="logs_all">All machines</string>
     <string name="logs_waiting">Waiting for logs…</string>
+    <string name="logs_copy">Copy</string>
+    <string name="logs_copied">Log line copied</string>
+    <string name="logs_to_top">Scroll to the oldest line</string>
+    <string name="logs_to_bottom">Scroll to the newest line</string>
     <string name="logs_failed">Couldn't reach Fly.io's logs. Retrying…</string>
     <string name="time_just_now">just now</string>
     <string name="time_minutes_ago">%1$d min ago</string>

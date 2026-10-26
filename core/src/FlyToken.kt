@@ -39,17 +39,21 @@ class FlyToken(
         nowSeconds: Long,
         marginSeconds: Long = 60,
     ): List<ThirdPartyCaveat> {
-        val parsed = macaroons.mapNotNull { MacaroonInfo.parse(it) }
         val live =
-            parsed.filter {
+            macaroons.mapNotNull { MacaroonInfo.parse(it) }.filter {
                 it.location != MacaroonInfo.LOCATION_PERMISSION &&
                     (it.expiresAt ?: Long.MAX_VALUE) > nowSeconds + marginSeconds
             }
-        return parsed
-            .filter { it.location == MacaroonInfo.LOCATION_PERMISSION }
-            .flatMap { it.thirdParty }
-            .filter { caveat -> live.none { it.keyId.contentEquals(caveat.ticket) } }
+        return thirdParty.filter { caveat -> live.none { it.keyId.contentEquals(caveat.ticket) } }
     }
+
+    /** Every third-party caveat on the permission tokens, discharged or not. */
+    internal val thirdParty: List<ThirdPartyCaveat>
+        get() =
+            macaroons
+                .mapNotNull { MacaroonInfo.parse(it) }
+                .filter { it.location == MacaroonInfo.LOCATION_PERMISSION }
+                .flatMap { it.thirdParty }
 
     /** These tokens with [discharges] added and the discharges they replace, or that expired, dropped. */
     internal fun withDischarges(

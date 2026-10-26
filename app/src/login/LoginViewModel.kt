@@ -2,12 +2,12 @@ package dev.ggoggam.hangar.app.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.ggoggam.hangar.app.session.Session
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyLogin
 import dev.ggoggam.hangar.core.FlyLoginException
+import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyToken
 import dev.ggoggam.hangar.core.PendingLogin
 import io.ktor.client.HttpClient
@@ -34,7 +34,7 @@ class LoginViewModel(
     private val login: FlyLogin,
     private val discharges: FlyDischarges,
     private val http: HttpClient,
-    private val session: Session,
+    private val session: FlySession,
     private val sessionName: String,
 ) : ViewModel() {
     private val _state = MutableStateFlow(LoginState())

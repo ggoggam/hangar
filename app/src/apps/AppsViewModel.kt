@@ -2,10 +2,10 @@ package dev.ggoggam.hangar.app.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.ggoggam.hangar.app.session.Session
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyApp
+import dev.ggoggam.hangar.core.FlySession
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -26,7 +26,7 @@ data class AppsState(
 
 class AppsViewModel(
     private val http: HttpClient,
-    private val session: Session,
+    private val session: FlySession,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppsState())
     val state: StateFlow<AppsState> = _state.asStateFlow()
@@ -50,13 +50,12 @@ class AppsViewModel(
         load =
             viewModelScope.launch {
                 try {
-                    val token = session.fresh() ?: return@launch
-                    val overview = FlyApi(http, token).overview()
+                    val overview = session.authorized { FlyApi(http, it).overview() }
                     _state.value = AppsState(email = overview.email, apps = overview.apps)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: FlyApiException.Unauthorized) {
-                    session.signOut()
+                    // Signed out, and the login screen is up.
                 } catch (e: Exception) {
                     _state.update { it.copy(loading = false, failed = true) }
                 }

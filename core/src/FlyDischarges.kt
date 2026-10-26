@@ -35,14 +35,16 @@ class FlyDischarges(
 ) {
     /**
      * [token] with a discharge for every third-party caveat that needs one, or [token] itself when
-     * none do. Throws [FlyApiException.Unauthorized] when Fly.io won't hand one out without the user
-     * signing in again.
+     * none do. [force] renews every discharge, even ones that look good, for when Fly.io has just
+     * turned the token down: the phone's clock may be off. Throws [FlyApiException.Unauthorized]
+     * when Fly.io won't hand one out without the user signing in again.
      */
     suspend fun refresh(
         token: FlyToken,
         nowSeconds: Long,
+        force: Boolean = false,
     ): FlyToken {
-        val needed = token.undischarged(nowSeconds)
+        val needed = if (force) token.thirdParty else token.undischarged(nowSeconds)
         if (needed.isEmpty()) return token
         val oauth = token.oauth ?: throw FlyApiException.Unauthorized()
         return token.withDischarges(needed.map { discharge(it, oauth) }, nowSeconds)

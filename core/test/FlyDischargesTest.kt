@@ -61,6 +61,17 @@ class FlyDischargesTest {
         }
 
     @Test
+    fun forcedRenewsAGoodTokenToo() =
+        runTest {
+            val good = TestMacaroons.discharge(ticket, now + 600)
+            val fresh = TestMacaroons.discharge(ticket, now + 900)
+            val fly = MockFly(HttpStatusCode.OK to """{"discharge":"$fresh"}""")
+            val refreshed = FlyDischarges(fly.http).refresh(FlyToken("$permission,$good,fo1_x"), now, force = true)
+            assertEquals(1, fly.requests.size)
+            assertEquals(FlyToken("$permission,$fresh,fo1_x"), refreshed)
+        }
+
+    @Test
     fun neverSendsTheOAuthTokenToAnotherHost() =
         runTest {
             val fly = MockFly()

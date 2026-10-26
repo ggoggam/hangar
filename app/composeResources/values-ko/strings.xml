@@ -72,6 +72,10 @@
     <string name="release_stable">안정</string>
     <string name="logs_all">모든 머신</string>
     <string name="logs_waiting">로그를 기다리는 중…</string>
+    <string name="logs_copy">복사</string>
+    <string name="logs_copied">로그를 복사했어요</string>
+    <string name="logs_to_top">가장 오래된 로그로 이동</string>
+    <string name="logs_to_bottom">최신 로그로 이동</string>
     <string name="logs_failed">Fly.io 로그에 연결하지 못했어요. 다시 시도하는 중…</string>
     <string name="time_just_now">방금</string>
     <string name="time_minutes_ago">%1$d분 전</string>

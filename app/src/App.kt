@@ -14,7 +14,7 @@ import dev.ggoggam.hangar.app.apps.AppsScreen
 import dev.ggoggam.hangar.app.dashboard.AppDashboardScreen
 import dev.ggoggam.hangar.app.login.LoginScreen
 import dev.ggoggam.hangar.app.navigation.Route
-import dev.ggoggam.hangar.app.session.Session
+import dev.ggoggam.hangar.core.FlySession
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -24,7 +24,7 @@ import org.koin.core.parameter.parametersOf
 fun App() {
     HangarTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            val token by koinInject<Session>().token.collectAsStateWithLifecycle()
+            val token by koinInject<FlySession>().token.collectAsStateWithLifecycle()
             if (token == null) {
                 LoginScreen(koinViewModel())
             } else {
