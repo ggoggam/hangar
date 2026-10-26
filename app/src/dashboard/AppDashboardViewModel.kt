@@ -169,7 +169,9 @@ class AppDashboardViewModel(
                 logCursor = page.cursor
                 _logs.update { s ->
                     val seen = s.entries.mapTo(HashSet()) { it.id }
-                    val fresh = page.entries.filter { it.id.isEmpty() || it.id !in seen }
+                    // add() also drops a line repeated within the page: Fly.io sometimes sends one twice,
+                    // and the list keys lines by id.
+                    val fresh = page.entries.filter { it.id.isEmpty() || seen.add(it.id) }
                     s.copy(entries = (s.entries + fresh).takeLast(MAX_LOG_LINES), failing = false)
                 }
                 if (page.entries.isNotEmpty()) {
