@@ -142,10 +142,14 @@ number is the commit count, or one past the latest on TestFlight if that's highe
 xcodebuild as `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`, so the values in the project file
 only matter for local builds.
 
-Signing is Xcode's automatic (cloud) signing: with an App Store Connect API key and
-`-allowProvisioningUpdates`, xcodebuild makes or downloads the distribution certificate and
-profile itself, so there's no fastlane `match` repo. To run the lane locally, set the three
-`ASC_*` variables below and run `bundle exec fastlane beta` in `ios-app/` (Ruby 3.3).
+Signing is Xcode's cloud signing, at export: with an App Store Connect API key and
+`-allowProvisioningUpdates`, xcodebuild signs with Apple's cloud-managed distribution certificate
+and an App Store profile it makes or downloads itself, so there's no fastlane `match` repo and no
+certificate on the runner. The archive is built unsigned (`CODE_SIGNING_ALLOWED=NO`), because
+signing it needs an Apple Development certificate with its key on the machine, and the account is
+at its limit of development certificates, so a fresh runner can't make one. To run the lane
+locally, set the three `ASC_*` variables below and run `bundle exec fastlane beta` in `ios-app/`
+(Ruby 3.3).
 
 ### One-time setup
 

@@ -7,9 +7,12 @@
 # running it again for the same commit still gets a new one. Both go to xcodebuild as build
 # settings, so the project file isn't changed.
 #
-# Signing is Xcode's automatic (cloud) signing: with the App Store Connect API key and
-# -allowProvisioningUpdates, xcodebuild makes or downloads the certificate and profile itself, so
-# there's no match repo. The key needs the App Manager role to make them the first time.
+# Signing is Xcode's cloud signing, at export only. The archive is built unsigned: signing it would
+# take an Apple Development certificate with its key on this machine, and a fresh runner can't make
+# one, since the account is at its limit of development certificates. The export then signs with
+# Apple's cloud-managed distribution certificate and an App Store profile, which xcodebuild makes
+# or downloads itself with the App Store Connect API key and -allowProvisioningUpdates, so there's
+# no match repo and no certificate on the runner. The key needs the App Manager role.
 
 require "base64"
 require "tempfile"
@@ -52,25 +55,15 @@ platform :ios do
     build = [commit_count, latest.to_i + 1].max
     UI.message("Hangar #{version} (#{build})")
 
-    # A temporary keychain for the signing certificate, made the default for this run.
-    setup_ci
-
-    # The archive's xcodebuild doesn't get the API key from fastlane, so it's passed here. The
-    # export does get it, and xcodebuild turns down a second -authenticationKeyPath, so
-    # export_xcargs only allows provisioning.
-    auth_args = [
-      "-allowProvisioningUpdates",
-      "-authenticationKeyPath", asc[:path],
-      "-authenticationKeyID", ENV["ASC_KEY_ID"],
-      "-authenticationKeyIssuerID", ENV["ASC_ISSUER_ID"]
-    ].join(" ")
-
+    # The export gets the API key from fastlane as -authenticationKey* flags, so export_xcargs
+    # only allows provisioning: xcodebuild turns down a second -authenticationKeyPath.
     build_app(
       project: "module.xcodeproj",
       scheme: "app",
       configuration: "Release",
       export_method: "app-store",
-      xcargs: "MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{build} #{auth_args}",
+      export_team_id: "8Z7776X9Y4",
+      xcargs: "MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{build} CODE_SIGNING_ALLOWED=NO",
       export_xcargs: "-allowProvisioningUpdates",
       output_directory: "build/ios",
       output_name: "hangar-#{version}-#{build}.ipa",
