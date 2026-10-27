@@ -1,0 +1,24 @@
+Hangar is an unofficial client for Fly.io. Check on your apps from your phone: their machines, logs, metrics, releases and what they cost.
+
+Hangar isn't made by or affiliated with Fly.io.
+
+WHAT IT SHOWS
+• Your apps across every organization, with an estimate of each organization's usage over the last 14 days and each app's share of it
+• Each app's overview: status, hostname, volumes, IP addresses and certificates
+• Metrics from Fly.io's managed Prometheus: CPU, memory, requests, errors and p95 latency over 1, 6 or 24 hours
+• Machines, with their region, size, state and health checks
+• The last 25 releases
+• Live logs, with JSON log lines shown as readable fields
+• Managed Postgres, Postgres apps, Upstash Redis and Tigris storage
+• Fly.io's open incidents, with a banner on the app list while any are open
+• Your account, organizations, members, access tokens and regions
+
+Hangar is read-only. It can't deploy, restart, scale or delete anything.
+
+SIGNING IN
+Sign in on fly.io in your browser, the same way fly auth login does, and paste the code Fly.io shows. Or paste an access token: a read-only one is enough (fly tokens create readonly your-org). No account yet? Try the demo, which opens every screen on sample data.
+
+PRIVACY
+Hangar talks to Fly.io and nothing else. It has no analytics, ads, crash reporting or tracking, and the developer runs no server. Your token stays in the iOS Keychain, on this device only. Hangar is open source, so you can check this yourself: https://github.com/ggoggam/hangar
+
+Fly.io is a trademark of Fly.io, Inc.

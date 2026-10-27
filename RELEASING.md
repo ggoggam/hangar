@@ -166,3 +166,8 @@ profile itself, so there's no fastlane `match` repo. To run the lane locally, se
 
 4. **TestFlight testers.** Add internal testers to a group in the app's TestFlight tab. Internal
    testers get each build once Apple has processed it.
+5. **The store listing.** `bundle exec fastlane metadata` uploads the text, category, review notes,
+   age rating and screenshots from `ios-app/fastlane` (see [store/README.md](store/README.md)).
+   App Store Connect keeps the rest: App Privacy (User ID, for app functionality, linked to the
+   user, not used for tracking, as on Google Play), the price (free) and availability (every
+   country or region), and the App Review contact, which stays out of the repo.
