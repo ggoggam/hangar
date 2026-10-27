@@ -12,7 +12,10 @@ import dev.ggoggam.hangar.app.storage.StorageViewModel
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyLogin
 import dev.ggoggam.hangar.core.FlySession
+import dev.ggoggam.hangar.core.flyDemoHttpClient
 import dev.ggoggam.hangar.core.flyHttpClient
+import dev.ggoggam.hangar.core.isDemo
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,15 +29,24 @@ import org.koin.mp.KoinPlatformTools
 /** What the approval page and Fly.io's token list call this login, such as "Hangar on Galaxy A23". */
 val SESSION_NAME = named("sessionName")
 
+/** The client that reaches Fly.io, for signing in and renewing tokens, which the demo never does. */
+private val LIVE_HTTP = named("liveHttp")
+
+private val DEMO_HTTP = named("demoHttp")
+
 private val appModule =
     module {
-        single { flyHttpClient() }
-        single { FlyLogin(get()) }
-        single { FlyDischarges(get()) }
+        single(LIVE_HTTP) { flyHttpClient() }
+        single(DEMO_HTTP) { flyDemoHttpClient() }
+        // The screens' client, picked as each screen opens: the demo's while the demo is signed in,
+        // so it never reaches the network. Signing in or out starts the screens afresh (see App).
+        factory<HttpClient> { if (get<FlySession>().token.value?.isDemo == true) get(DEMO_HTTP) else get(LIVE_HTTP) }
+        single { FlyLogin(get(LIVE_HTTP)) }
+        single { FlyDischarges(get(LIVE_HTTP)) }
         // Renewals on the main thread, where the screens sign in and out, so the token only changes there.
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
-        viewModel { LoginViewModel(get(), get(), get(), get(), get(SESSION_NAME)) }
+        viewModel { LoginViewModel(get(), get(), get(LIVE_HTTP), get(), get(SESSION_NAME)) }
         viewModel { AppsViewModel(get(), get()) }
         viewModel { StatusViewModel(get()) }
         viewModel { StorageViewModel(get(), get()) }
