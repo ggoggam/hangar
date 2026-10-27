@@ -4,7 +4,8 @@ name: Release Android
 # uploads it to Google Play. Tag release makes the tag when a new versionName passes CI on main and
 # starts this with the PLAY_TRACK track. A pushed tag goes to the track in the PLAY_TRACK repository
 # variable, closed testing ("alpha") if it's unset.
-# Running it by hand from a tag picks the track. "none" only builds the bundle, which is how the
+# Running it by hand picks the track, from a tag or from main. From main it builds main as it is,
+# with the versionName it has and a new versionCode, for a build that doesn't need a version bump. "none" only builds the bundle, which is how the
 # first one gets to Play Console, since Play takes no API uploads before that (see RELEASING.md).
 on:
   push:
@@ -54,19 +55,22 @@ jobs:
           # The whole history, since the commit count is the versionCode.
           fetch-depth: 0
 
-      # Every build on Play is a tag, and the tag says what module.yaml says.
+      # Every build on Play is main or a tag that says what module.yaml says.
       - name: Check the version
         id: version
         run: |
           version="$(sed -n 's/^ *versionName: *"\(.*\)"$/\1/p' android-app/module.yaml)"
-          if [ "$GITHUB_REF_TYPE" != tag ]; then
-            echo "::error::Releases are built from v* tags. Run this from a tag, not $GITHUB_REF_NAME."
-            exit 1
-          fi
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName $version in android-app/module.yaml."
-            exit 1
-          fi
+          case "$GITHUB_REF_TYPE/$GITHUB_REF_NAME" in
+            "tag/v$version" | branch/main) ;;
+            tag/*)
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName $version in android-app/module.yaml."
+              exit 1
+              ;;
+            *)
+              echo "::error::Releases are built from main or a v* tag. Run this from one of those, not $GITHUB_REF_NAME."
+              exit 1
+              ;;
+          esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # Restores the CI android job's toolchain cache but never saves one, so a release can't
@@ -142,17 +146,17 @@ jobs:
       - name: Build the signed app bundle
         run: |
           ./kotlin package -m android-app -f aab
-          cp build/tasks/_android-app_bundleAndroid/gradle-project-release.aab "hangar-${{ steps.version.outputs.version }}.aab"
+          cp build/tasks/_android-app_bundleAndroid/gradle-project-release.aab "hangar-${{ steps.version.outputs.version }}-${{ steps.code.outputs.code }}.aab"
 
       # Without a usable keystore the toolchain only warns and builds an unsigned bundle, which
       # Play would turn down after the upload. Catch it here instead.
       - name: Check the bundle is signed
-        run: jarsigner -verify "hangar-${{ steps.version.outputs.version }}.aab" | grep -q "jar verified"
+        run: jarsigner -verify "hangar-${{ steps.version.outputs.version }}-${{ steps.code.outputs.code }}.aab" | grep -q "jar verified"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: hangar-${{ steps.version.outputs.version }}
-          path: hangar-${{ steps.version.outputs.version }}.aab
+          name: hangar-${{ steps.version.outputs.version }}-${{ steps.code.outputs.code }}
+          path: hangar-${{ steps.version.outputs.version }}-${{ steps.code.outputs.code }}.aab
           if-no-files-found: error
 
       # A third-party action with the service account's key, so it's pinned to a commit.
@@ -162,7 +166,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: dev.ggoggam.hangar
-          releaseFiles: hangar-${{ steps.version.outputs.version }}.aab
+          releaseFiles: hangar-${{ steps.version.outputs.version }}-${{ steps.code.outputs.code }}.aab
           releaseName: ${{ steps.version.outputs.version }} (${{ steps.code.outputs.code }})
           track: ${{ env.TRACK }}
           status: ${{ env.STATUS }}

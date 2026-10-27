@@ -31,6 +31,13 @@ under "Use workflow from", and choose a track: `internal`, `alpha` (closed testi
 or `none` to only build the bundle. A release on a track Play hasn't opened to the app fails at the
 upload step, and the bundle is still in the run's artifacts.
 
+To ship `main` again without a version bump, such as a fix during the closed test, run **Release
+Android** or **Release iOS** by hand from `main`. It builds `main` as it is, with the `versionName`
+it has and a new `versionCode` or build number, so testers see `0.1.1 (57)`, then `0.1.1 (58)`.
+Nothing is tagged, so the tag stays on the build that first had that version. Runs from any other
+branch are turned down, and the `play-store` and `app-store` environments allow only `main` and
+`v*` tags.
+
 ## Before production: closed testing
 
 Personal developer accounts made after 13 November 2023 can't publish to production until they've
@@ -85,8 +92,8 @@ leaked, Play Console can reset it; the app's own signing key is unaffected.
 ### 3. Add the secrets to GitHub
 
 Create an environment named `play-store` (Settings → Environments). Under deployment branches and
-tags, allow only tags matching `v*`, so nothing but a release tag can reach these secrets. Then
-add these environment secrets:
+tags, allow only the `main` branch and tags matching `v*`, so nothing but a release can reach these
+secrets. Then add these environment secrets:
 
 | Secret | Value |
 |---|---|
@@ -148,8 +155,8 @@ profile itself, so there's no fastlane `match` repo. To run the lane locally, se
 2. **An App Store Connect API key** with the App Manager role or higher, so the first build can
    make the signing certificate (Users and Access → Integrations → App Store Connect API). Hangar
    uses the team's key, `UDDZFB62GL`.
-3. **The secrets.** Create an environment named `app-store`, allow only tags matching `v*` under
-   deployment branches and tags, and add these environment secrets:
+3. **The secrets.** Create an environment named `app-store`, allow only the `main` branch and tags
+   matching `v*` under deployment branches and tags, and add these environment secrets:
 
    | Secret | Value |
    |---|---|
