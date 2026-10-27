@@ -36,7 +36,9 @@ mise run dev:ios       # an iPhone, else a simulator (macOS only)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pre-commit, the core tests on the JVM and on the iOS
-simulator, and builds both apps, all on GitHub-hosted runners.
+simulator, and builds both apps, all on GitHub-hosted runners. A `v*` tag builds the signed Android
+bundle and uploads it to Google Play (`.github/workflows/release-android.yml`): see
+[RELEASING.md](RELEASING.md).
 
 | Module | What it is |
 |---|---|
@@ -129,6 +131,9 @@ OAuth-only `Bearer` token gets a 401 there. The older Managed Postgres list is t
 flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
 
 ## Privacy
+
+The privacy policy for the store listings is [PRIVACY.md](PRIVACY.md); this section is the detail
+behind it.
 
 The app is a thin client between you and Fly.io's API. It has no server of its own, and no
 analytics, crash reporting, ads or other third-party SDKs (the dependencies are in
