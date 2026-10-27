@@ -246,6 +246,80 @@ run = "uv run fonts/build.py"
 description = "Redraw the app icon for Android and iOS"
 run = "uv run icon/build.py"
 
+# ── App Store screenshots ──────────────────────────────────────────────────────
+# The demo on a 6.9" iPhone and a 13" iPad simulator, the sizes App Store Connect asks for, into
+# ios-app/fastlane/screenshots, where `fastlane metadata` uploads them from. Each simulator is
+# erased first, since the iOS Keychain keeps a signed-in token across reinstalls. AXe taps through
+# the screens by their accessibility labels: brew install cameroncooke/axe/axe.
+
+[tasks."screenshots:ios"]
+description = "Take the App Store screenshots from the demo on iPhone and iPad simulators (macOS only)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+command -v axe >/dev/null || { echo "Needs AXe: brew install cameroncooke/axe/axe" >&2; exit 1; }
+./kotlin build -m ios-app -p iosSimulatorArm64
+app=build/tasks/_ios-app_buildIosAppIosSimulatorArm64Debug/bin/Debug-iphonesimulator/ios-app.app
+out=ios-app/fastlane/screenshots/en-US
+mkdir -p "$out"
+
+# Taps the first element of a type whose label starts with $2, for rows whose label carries numbers.
+tap_prefix() {
+  local x y
+  read -r x y < <(axe describe-ui --udid "$udid" | jq -r --arg type "$1" --arg prefix "$2" \
+    'first(.. | objects | select(.type == $type and ((.AXLabel // "") | startswith($prefix))) | "\(.frame.x + .frame.width / 2) \(.frame.y + .frame.height / 2)")')
+  [ -n "$x" ] || { echo "No $1 labelled '$2...' on screen." >&2; exit 1; }
+  axe tap -x "$x" -y "$y" --udid "$udid" >/dev/null
+}
+tap() { axe tap --label "$1" --element-type Button --wait-timeout 30 --udid "$udid" >/dev/null; }
+# Long enough for the demo's metrics, logs and animations to settle.
+shoot() { sleep 3; xcrun simctl io "$udid" screenshot "$out/$device-$1.png" >/dev/null 2>&1; echo "$out/$device-$1.png"; }
+
+for spec in "iphone|Hangar iPhone 6.9|iPhone-17-Pro-Max" "ipad|Hangar iPad 13|iPad-Pro-13-inch-M5-12GB"; do
+  IFS='|' read -r device name type <<<"$spec"
+  udid="$(xcrun simctl list devices | grep -F "$name (" | grep -oE '[0-9A-F-]{36}' | head -1 || true)"
+  [ -n "$udid" ] || udid="$(xcrun simctl create "$name" "com.apple.CoreSimulator.SimDeviceType.$type")"
+  xcrun simctl shutdown "$udid" 2>/dev/null || true
+  xcrun simctl erase "$udid"
+  xcrun simctl boot "$udid"
+  xcrun simctl bootstatus "$udid" -b >/dev/null
+  xcrun simctl status_bar "$udid" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
+    --cellularMode active --cellularBars 4 --batteryState discharging --batteryLevel 100
+  xcrun simctl install "$udid" "$app"
+  xcrun simctl launch "$udid" dev.ggoggam.hangar >/dev/null
+
+  # A freshly booted simulator draws the app before it takes taps.
+  for _ in $(seq 30); do
+    axe describe-ui --udid "$udid" 2>/dev/null | grep -q '"Try the demo"' && break
+    sleep 2
+  done
+  sleep 5
+  tap "Try the demo"
+  shoot 01-apps
+  tap_prefix Button "api, "
+  shoot 02-overview
+  tap Logs
+  shoot 03-logs
+  tap Machines
+  shoot 04-machines
+  tap Back
+  tap Data
+  shoot 05-data
+  xcrun simctl shutdown "$udid"
+done
+
+# The screens use far fewer than 256 colours, so a palette PNG looks the same at a third of the
+# size, which keeps the dense Logs shots under the repo's 500 KB limit.
+uv run -q --with pillow python -I - "$out"/*.png <<'PY'
+import sys
+from PIL import Image
+
+for path in sys.argv[1:]:
+    image = Image.open(path).convert("RGB")
+    image.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(path, optimize=True)
+PY
+'''
+
 # ── Style ──────────────────────────────────────────────────────────────────────
 
 [tasks.lint]

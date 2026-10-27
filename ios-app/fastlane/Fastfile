@@ -1,5 +1,6 @@
-# Hangar's TestFlight lane. Run from ios-app/ with `bundle exec fastlane beta`; Release iOS
-# (.github/workflows/release-ios.yml) runs it from a v<versionName> tag.
+# Hangar's App Store lanes, run from ios-app/ with `bundle exec fastlane <lane>`: beta builds and
+# uploads to TestFlight (Release iOS, .github/workflows/release-ios.yml, runs it), and metadata
+# uploads the store listing.
 #
 # The version is versionName in android-app/module.yaml, the one place a release is decided. The
 # build number is the commit count, or one past the latest on TestFlight if that's higher, so
@@ -81,6 +82,25 @@ platform :ios do
       skip_waiting_for_build_processing: true,
       distribute_external: false,
       changelog: "Hangar #{version} (#{build})"
+    )
+  end
+
+  # The store listing: text, categories, review notes, age rating and screenshots, from
+  # fastlane/metadata, age_rating.json and screenshots (`mise run screenshots:ios`). It goes to the
+  # App Store version being prepared, named after versionName, and submits nothing. The App Review
+  # contact, pricing and App Privacy answers are set in App Store Connect instead.
+  desc "Upload the App Store listing and screenshots, without submitting"
+  lane :metadata do
+    asc = asc_api_key
+    deliver(
+      api_key: asc[:api_key],
+      app_version: version_name,
+      skip_binary_upload: true,
+      overwrite_screenshots: true,
+      app_rating_config_path: File.expand_path("age_rating.json", __dir__),
+      submit_for_review: false,
+      run_precheck_before_submit: false,
+      force: true
     )
   end
 end

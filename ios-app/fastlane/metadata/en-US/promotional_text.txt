@@ -1,0 +1,1 @@
+A read-only window on your Fly.io apps: machines, logs, metrics, releases and what they cost. Open source, and it talks to Fly.io and nothing else.
