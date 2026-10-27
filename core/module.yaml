@@ -18,6 +18,8 @@ dependencies:
   - $libs.kotlinx.coroutines.core: exported
   - $libs.kotlincrypto.sha2
   - $libs.kotlincrypto.crypto.rand
+  # The demo's client (FlyDemo.kt) answers from sample data on Ktor's mock engine.
+  - $libs.ktor.client.mock
 
 dependencies@android:
   - $libs.ktor.client.okhttp
@@ -26,5 +28,4 @@ dependencies@ios:
   - $libs.ktor.client.darwin
 
 test-dependencies:
-  - $libs.ktor.client.mock
   - $libs.kotlinx.coroutines.test

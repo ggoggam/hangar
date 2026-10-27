@@ -83,6 +83,13 @@ token can't sign out a newer one.
 Pasting a token also works, for anyone who would rather give the app a read-only one
 (`fly tokens create readonly <org>`) than a full login.
 
+"Try the demo" signs in with a token of its own (`DEMO_TOKEN`) instead. While it's signed in, the
+screens get an HTTP client on Ktor's mock engine that answers each of the calls below with sample
+JSON in the shape Fly.io sends (`core/src/FlyDemo.kt`), so the demo runs the same code as a real
+session. It's what Google Play's reviewers use, since the app does nothing without a Fly.io
+account. `FlyDemoTest` makes every call the screens make against it, so a new call that the demo
+can't answer fails CI.
+
 flyctl can also take the code over a loopback callback (`redirect_port`), which would spare the
 paste. The app doesn't use it yet: it hasn't been tested whether a mobile browser lets
 fly.io call `127.0.0.1`, or whether the app stays alive to answer while the browser is in front.
@@ -139,7 +146,9 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   "Open status.fly.io" hand a link to your browser; the app itself doesn't connect to either.
   Renewing a token's auth discharge goes to the third party the token names, and
   `FlyDischarges` refuses any host but `api.fly.io` and `auth.fly.io`, so your OAuth token can't
-  be sent anywhere else. On Android the only permission it asks for is `INTERNET`.
+  be sent anywhere else. On Android the only permission it asks for is `INTERNET`. "Try the
+  demo" connects to nothing: while it's signed in, the screens get a client that answers every
+  call from sample data built into the app (`core/src/FlyDemo.kt`).
 - **What it sends.** Your Fly.io token, to Fly.io. When you sign in, a name for the login
   ("Hangar on SM-A235F", "Hangar on iPhone"), which Fly.io shows on its approval page and in your
   token list. That's the device model, never the name you gave the phone or any device

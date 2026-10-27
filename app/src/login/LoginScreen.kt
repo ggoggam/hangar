@@ -77,6 +77,9 @@ fun LoginScreen(vm: LoginViewModel) {
                     TextButton(onClick = { vm.showTokenEntry(true) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(Res.string.login_use_token))
                     }
+                    TextButton(onClick = vm::tryDemo, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(Res.string.login_demo))
+                    }
                 }
 
                 else -> {
