@@ -11,7 +11,8 @@ The mark is drawn on Android's 108 dp adaptive icon canvas. A launcher shows the
 the mark stays inside the 66 dp safe zone that every mask keeps. iOS gets the same 72 dp square.
 
 Writes the Android foreground (also the themed icon's monochrome layer), the iOS icon's light,
-dark and tinted images, and the light and dark logos the README shows. The rest of the icon (the adaptive icon, its background colour and the
+dark and tinted images, the light and dark logos the README shows, and Google Play's 512 px icon
+and 1024 x 500 feature graphic, which set the name in the app's own font. The rest of the icon (the adaptive icon, its background colour and the
 asset catalogue's Contents.json) is written by hand.
 
 Run with `mise run icon`.
@@ -20,12 +21,14 @@ Run with `mise run icon`.
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 ANDROID = ROOT / "android-app" / "res" / "drawable" / "ic_launcher_foreground.xml"
 IOS = ROOT / "ios-app" / "src" / "Assets.xcassets" / "AppIcon.appiconset"
 LOGO = ROOT / "icon"
+STORE = ROOT / "store"
+FONT = ROOT / "app" / "composeResources" / "font"
 
 CENTRE = 54  # of the 108 dp canvas
 RADIUS = 21  # the roof: 58% of the 72 dp a launcher shows
@@ -99,12 +102,12 @@ def polygon(scale, origin):
     return [((x - origin) * scale, (y - origin) * scale) for x, y in points]
 
 
-def render(background, ink):
-    size = IOS_SIZE * SUPERSAMPLE
+def render(background, ink, size=IOS_SIZE):
+    big = size * SUPERSAMPLE
     origin, span = VIEWPORT
-    image = Image.new("RGB", (size, size), background)
-    ImageDraw.Draw(image).polygon(polygon(size / span, origin), fill=ink)
-    return image.resize((IOS_SIZE, IOS_SIZE), Image.LANCZOS)
+    image = Image.new("RGB", (big, big), background)
+    ImageDraw.Draw(image).polygon(polygon(big / span, origin), fill=ink)
+    return image.resize((size, size), Image.LANCZOS)
 
 
 def write_android():
@@ -150,8 +153,31 @@ def write_logo():
     (LOGO / "logo-dark.svg").write_text(logo(INK, PAPER))
 
 
+def write_store():
+    STORE.mkdir(exist_ok=True)
+    # Play masks the icon's corners itself, so it's the full square, as on iOS.
+    render(PAPER, INK, 512).save(STORE / "play-icon.png", optimize=True)
+
+    # The feature graphic: the mark beside the name and what the app is, on the icon's paper.
+    width, height = 1024, 500
+    big = Image.new("RGB", (width * SUPERSAMPLE, height * SUPERSAMPLE), PAPER)
+    draw = ImageDraw.Draw(big)
+    origin, span = VIEWPORT
+    mark = 340 * SUPERSAMPLE
+    left, top = 70 * SUPERSAMPLE, (height * SUPERSAMPLE - mark) // 2
+    draw.polygon([(x + left, y + top) for x, y in polygon(mark / span, origin)], fill=INK)
+    name = ImageFont.truetype(str(FONT / "hangar_sans_bold.otf"), 128 * SUPERSAMPLE)
+    line = ImageFont.truetype(str(FONT / "hangar_sans_regular.otf"), 34 * SUPERSAMPLE)
+    text_left = 440 * SUPERSAMPLE
+    draw.text((text_left, 248 * SUPERSAMPLE), "Hangar", font=name, fill=INK, anchor="ls")
+    draw.text((text_left, 312 * SUPERSAMPLE), "Your Fly.io apps, on your phone", font=line, fill="#525252", anchor="ls")
+    draw.text((text_left, 358 * SUPERSAMPLE), "Unofficial, not affiliated with Fly.io", font=line, fill="#737373", anchor="ls")
+    big.resize((width, height), Image.LANCZOS).save(STORE / "feature-graphic.png", optimize=True)
+
+
 if __name__ == "__main__":
     write_android()
     write_ios()
     write_logo()
-    print(f"Wrote {ANDROID.relative_to(ROOT)}, {IOS.relative_to(ROOT)} and {LOGO.relative_to(ROOT)}/logo*.svg")
+    write_store()
+    print(f"Wrote {ANDROID.relative_to(ROOT)}, {IOS.relative_to(ROOT)}, {LOGO.relative_to(ROOT)}/logo*.svg and {STORE.relative_to(ROOT)}")
