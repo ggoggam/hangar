@@ -123,6 +123,9 @@ flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
 
 ## Privacy
 
+The privacy policy for the store listings is [PRIVACY.md](PRIVACY.md); this section is the detail
+behind it.
+
 The app is a thin client between you and Fly.io's API. It has no server of its own, and no
 analytics, crash reporting, ads or other third-party SDKs (the dependencies are in
 `libs.versions.toml`).
