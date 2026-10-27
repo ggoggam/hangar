@@ -21,7 +21,7 @@ mise run pre-commit        # what CI's pre-commit job runs
 ```
 
 CI runs pre-commit, the core tests on the JVM and the iOS simulator, and both app builds on every
-pull request.
+pull request. Releasing to Google Play is in [RELEASING.md](RELEASING.md).
 
 ## Layout
 

@@ -1,0 +1,123 @@
+name: Release Android
+
+# Builds the signed app bundle from a v<versionName> tag and uploads it to Google Play. A pushed tag
+# goes to the track in the PLAY_TRACK repository variable, closed testing ("alpha") if it's unset.
+# Running it by hand from a tag picks the track. "none" only builds the bundle, which is how the
+# first one gets to Play Console, since Play takes no API uploads before that (see RELEASING.md).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Play track ("none" only builds the bundle)
+        type: choice
+        options:
+          - alpha
+          - internal
+          - production
+          - none
+        default: alpha
+      status:
+        description: Release status ("draft" until Play takes completed releases)
+        type: choice
+        options:
+          - completed
+          - draft
+        default: completed
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancelled halfway through an upload.
+concurrency:
+  group: release-android
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    # The upload key and the Play service account are secrets of this environment, so its
+    # deployment rules decide which refs can use them.
+    environment: play-store
+    env:
+      # A tag push has no inputs, so it gets PLAY_TRACK or closed testing, and completed.
+      TRACK: ${{ inputs.track || vars.PLAY_TRACK || 'alpha' }}
+      STATUS: ${{ inputs.status || 'completed' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Every build on Play is a tag, and the tag says what module.yaml says.
+      - name: Check the version
+        id: version
+        run: |
+          version="$(sed -n 's/^ *versionName: *"\(.*\)"$/\1/p' android-app/module.yaml)"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::Releases are built from v* tags. Run this from a tag, not $GITHUB_REF_NAME."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName $version in android-app/module.yaml."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Restores the CI android job's toolchain cache but never saves one, so a release can't
+      # change what CI builds with.
+      - uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-${{ runner.os }}-android-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          restore-keys: |
+            kotlin-${{ runner.os }}-android-
+
+      # The keystore goes in the runner's temp directory, outside the checkout.
+      - name: Write the upload key
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_UPLOAD_KEYSTORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS ANDROID_UPLOAD_KEY_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::The play-store environment has no $name secret."; exit 1; }
+          done
+          echo "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/upload.jks"
+            echo "storePassword=$ANDROID_UPLOAD_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_UPLOAD_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_UPLOAD_KEY_PASSWORD"
+          } > android-app/keystore.properties
+
+      # R8's mapping is inside the bundle (BUNDLE-METADATA), so Play deobfuscates crash reports
+      # without a separate mapping upload.
+      - name: Build the signed app bundle
+        run: |
+          ./kotlin package -m android-app -f aab
+          cp build/tasks/_android-app_bundleAndroid/gradle-project-release.aab "hangar-${{ steps.version.outputs.version }}.aab"
+
+      # Without a usable keystore the toolchain only warns and builds an unsigned bundle, which
+      # Play would turn down after the upload. Catch it here instead.
+      - name: Check the bundle is signed
+        run: jarsigner -verify "hangar-${{ steps.version.outputs.version }}.aab" | grep -q "jar verified"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hangar-${{ steps.version.outputs.version }}
+          path: hangar-${{ steps.version.outputs.version }}.aab
+          if-no-files-found: error
+
+      # A third-party action with the service account's key, so it's pinned to a commit.
+      - name: Upload to Google Play
+        if: env.TRACK != 'none'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: dev.ggoggam.hangar
+          releaseFiles: hangar-${{ steps.version.outputs.version }}.aab
+          releaseName: ${{ steps.version.outputs.version }}
+          track: ${{ env.TRACK }}
+          status: ${{ env.STATUS }}
