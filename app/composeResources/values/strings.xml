@@ -11,6 +11,7 @@
     <string name="login_token_hint">Paste a Fly.io access token. A read-only one is enough: fly tokens create readonly &lt;org&gt;</string>
     <string name="login_token_label">Access token</string>
     <string name="login_token_back">Sign in with the browser instead</string>
+    <string name="login_demo">Try the demo</string>
     <string name="error_expired">That login expired. Start a new one.</string>
     <string name="error_bad_code">Fly.io didn't accept that code. Check it and try again.</string>
     <string name="error_bad_token">Fly.io didn't accept that token.</string>

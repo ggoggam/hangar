@@ -151,9 +151,11 @@ class FlyApi(
     }
 
     private companion object {
+        // Each query is named, as fly-go's generated ones are; the demo answers them by name.
+
         // fly-go's getAppsPage, trimmed to what the app shows.
         const val OVERVIEW_QUERY = """
-            query(${'$'}after: String) {
+            query Overview(${'$'}after: String) {
               viewer { email }
               apps(type: "container", first: 200, after: ${'$'}after) {
                 pageInfo { hasNextPage endCursor }
@@ -172,7 +174,7 @@ class FlyApi(
 
         // fly-go's GetAppCompact, the app half of `fly status`.
         const val APP_QUERY = """
-            query(${'$'}appName: String!) {
+            query App(${'$'}appName: String!) {
               app(name: ${'$'}appName) {
                 name
                 hostname
@@ -187,7 +189,7 @@ class FlyApi(
 
         // fly-go's GetAppReleasesMachines, behind `fly releases`.
         const val RELEASES_QUERY = """
-            query(${'$'}appName: String!, ${'$'}limit: Int!) {
+            query Releases(${'$'}appName: String!, ${'$'}limit: Int!) {
               app(name: ${'$'}appName) {
                 releases: releasesUnprocessed(first: ${'$'}limit) { nodes { $RELEASE_FIELDS } }
               }
@@ -196,7 +198,7 @@ class FlyApi(
 
         // fly-go's GetAppHostIssues, behind `fly incidents hosts list`.
         const val HOST_ISSUES_QUERY = """
-            query(${'$'}appName: String!) {
+            query HostIssues(${'$'}appName: String!) {
               app(name: ${'$'}appName) {
                 hostIssues { nodes { internalId message createdAt updatedAt } }
               }
@@ -205,14 +207,14 @@ class FlyApi(
 
         // fly-go's GetOrganizations, trimmed to what the app shows.
         const val ORGANIZATIONS_QUERY = """
-            query {
+            query Organizations {
               organizations { nodes { slug rawSlug name type viewerRole } }
             }
         """
 
         // fly-go's GetCurrentUser, behind `fly auth whoami`.
         const val WHOAMI_QUERY = """
-            query {
+            query Whoami {
               viewer {
                 ... on User { email }
                 ... on Macaroon { email }
@@ -222,7 +224,7 @@ class FlyApi(
 
         // fly-go's GetDetailedOrganizationBySlug, behind `fly orgs show`.
         const val ORGANIZATION_QUERY = """
-            query(${'$'}slug: String!) {
+            query Organization(${'$'}slug: String!) {
               organization(slug: ${'$'}slug) {
                 slug
                 name
@@ -235,7 +237,7 @@ class FlyApi(
 
         // fly-go's GetOrgLimitedAccessTokens, behind `fly tokens list --scope org`.
         const val ORGANIZATION_TOKENS_QUERY = """
-            query(${'$'}slug: String!) {
+            query OrganizationTokens(${'$'}slug: String!) {
               organization(slug: ${'$'}slug) {
                 limitedAccessTokens { nodes { id name expiresAt revokedAt user { email } } }
               }
@@ -244,7 +246,7 @@ class FlyApi(
 
         // flyctl's ListAddOns, behind `fly redis list` and `fly storage list`.
         const val ADD_ONS_QUERY = """
-            query(${'$'}addOnType: AddOnType) {
+            query AddOns(${'$'}addOnType: AddOnType) {
               addOns(type: ${'$'}addOnType) {
                 nodes {
                   id
@@ -261,7 +263,7 @@ class FlyApi(
 
         // fly-go's getAppsPage with a role, behind `fly postgres list`.
         const val ROLE_APPS_QUERY = """
-            query(${'$'}after: String, ${'$'}role: String) {
+            query RoleApps(${'$'}after: String, ${'$'}role: String) {
               apps(type: "container", first: 200, after: ${'$'}after, role: ${'$'}role) {
                 pageInfo { hasNextPage endCursor }
                 nodes {

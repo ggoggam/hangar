@@ -2,6 +2,7 @@ package dev.ggoggam.hangar.app.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.ggoggam.hangar.core.DEMO_TOKEN
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyDischarges
@@ -64,6 +65,9 @@ class LoginViewModel(
             finish(renewed)
         }
     }
+
+    /** Signs in to the demo, which answers from sample data built into the app. */
+    fun tryDemo() = finish(DEMO_TOKEN)
 
     fun showTokenEntry(on: Boolean) = _state.update { LoginState(tokenEntry = on) }
 
