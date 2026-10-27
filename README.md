@@ -1,4 +1,22 @@
-# Hangar
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="icon/logo-dark.svg">
+    <img src="icon/logo.svg" width="128" height="128" alt="Hangar's icon: a Quonset hangar with an arched door">
+  </picture>
+</p>
+
+<h1 align="center">Hangar</h1>
+
+<p align="center">
+  Watch your Fly.io apps from your phone: machines, logs, metrics, releases and usage.
+</p>
+
+<p align="center">
+  <a href="https://github.com/ggoggam/hangar/actions/workflows/ci.yml"><img src="https://github.com/ggoggam/hangar/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-171717" alt="Platforms: Android and iOS">
+  <img src="https://img.shields.io/badge/Kotlin-Compose%20Multiplatform-171717?logo=kotlin&logoColor=white" alt="Kotlin, Compose Multiplatform">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-171717" alt="MIT license"></a>
+</p>
 
 An unofficial mobile client for watching Fly.io apps, on Android and iOS. Not made by or
 affiliated with Fly.io.
