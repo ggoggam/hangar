@@ -7,18 +7,23 @@ release is a merged version bump.
 
 ## Releasing a version
 
-In a pull request, bump `versionName` and `versionCode` in `android-app/module.yaml`. Play turns
-down a `versionCode` it has seen before, in any track, so it goes up by one every time, even for a
-build that never left closed testing.
+In a pull request, bump `versionName` in `android-app/module.yaml`. That's the only version you
+edit.
+
+`versionCode` isn't kept in the repo. Play turns down a `versionCode` it has seen before, in any
+track, so Release Android works it out for each build: the commit count, or one past the highest
+code on Play if that's higher, so running it again for the same commit still gets a new one. It's
+in the run's notices and the Play release name, as in `0.1.1 (42)`. Local builds get Amper's
+default, 1.
 
 Once it's merged and CI passes on `main`, **Tag release** tags the merge commit `v` plus
 `versionName` and starts **Release Android** from that tag. Release Android builds the signed
 bundle, keeps it as the run's artifact and uploads it to the track in the `PLAY_TRACK` repository
 variable (closed testing if it's unset). A merge that leaves `versionName` alone releases nothing.
 
-Tag release stops without tagging if `versionCode` isn't above the last release tag's, since the
-tags ruleset keeps a `v*` tag from being deleted once it's pushed. Pushing a `v*` tag yourself
-still starts a release, and Release Android checks that it matches `versionName`.
+Pushing a `v*` tag yourself still starts a release, and Release Android checks that it matches
+`versionName`. If a release fails after its tag is pushed, fix it and run **Release Android** again
+from the same tag, since the tags ruleset keeps a `v*` tag from being deleted.
 
 To send a tag somewhere else, run **Release Android** by hand from the Actions tab, pick the tag
 under "Use workflow from", and choose a track: `internal`, `alpha` (closed testing), `production`,

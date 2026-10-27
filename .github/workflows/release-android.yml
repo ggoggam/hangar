@@ -1,9 +1,9 @@
 name: Release Android
 
-# Builds the signed app bundle from a v<versionName> tag and uploads it to Google Play. Tag release
-# makes the tag when a new versionName passes CI on main and starts this with the PLAY_TRACK track.
-# A pushed tag goes to the track in the PLAY_TRACK repository variable, closed testing ("alpha") if
-# it's unset.
+# Builds the signed app bundle from a v<versionName> tag, with a versionCode it works out, and
+# uploads it to Google Play. Tag release makes the tag when a new versionName passes CI on main and
+# starts this with the PLAY_TRACK track. A pushed tag goes to the track in the PLAY_TRACK repository
+# variable, closed testing ("alpha") if it's unset.
 # Running it by hand from a tag picks the track. "none" only builds the bundle, which is how the
 # first one gets to Play Console, since Play takes no API uploads before that (see RELEASING.md).
 on:
@@ -50,6 +50,9 @@ jobs:
       STATUS: ${{ inputs.status || 'completed' }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # The whole history, since the commit count is the versionCode.
+          fetch-depth: 0
 
       # Every build on Play is a tag, and the tag says what module.yaml says.
       - name: Check the version
@@ -74,6 +77,46 @@ jobs:
           key: kotlin-${{ runner.os }}-android-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
           restore-keys: |
             kotlin-${{ runner.os }}-android-
+
+      # versionCode is the commit count, or one past the highest code on Play if that's higher, so
+      # it climbs on its own and running this again for the same commit doesn't reuse one. Play
+      # turns down a code it has seen, on any track, from any bundle uploaded. A build that isn't
+      # uploaded ("none") doesn't ask Play, since there may be no service account yet.
+      - name: Work out the versionCode
+        id: code
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -o pipefail
+          code="$(git rev-list --count HEAD)"
+          if [ "$TRACK" != none ]; then
+            [ -n "$PLAY_SERVICE_ACCOUNT_JSON" ] || { echo "::error::The play-store environment has no PLAY_SERVICE_ACCOUNT_JSON secret."; exit 1; }
+            # A token for the Play Developer API, from a JWT the service account's key signs.
+            b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+            claims="$(jq -c --argjson now "$(date +%s)" '{iss: .client_email, scope: "https://www.googleapis.com/auth/androidpublisher", aud: "https://oauth2.googleapis.com/token", iat: $now, exp: ($now + 600)}' <<< "$PLAY_SERVICE_ACCOUNT_JSON")"
+            unsigned="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '%s' "$claims" | b64url)"
+            signature="$(printf '%s' "$unsigned" | openssl dgst -sha256 -sign <(jq -r .private_key <<< "$PLAY_SERVICE_ACCOUNT_JSON") | b64url)"
+            token="$(curl -fsS https://oauth2.googleapis.com/token -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer -d assertion="$unsigned.$signature" | jq -r .access_token)"
+            echo "::add-mask::$token"
+
+            # Reading bundles and tracks takes an edit, which is thrown away after.
+            api=https://androidpublisher.googleapis.com/androidpublisher/v3/applications/dev.ggoggam.hangar/edits
+            auth="Authorization: Bearer $token"
+            edit="$(curl -fsS -X POST -H "$auth" "$api" | jq -r .id)"
+            highest="$( {
+              curl -fsS -H "$auth" "$api/$edit/bundles" | jq -r '.bundles[]?.versionCode'
+              curl -fsS -H "$auth" "$api/$edit/tracks" | jq -r '.tracks[]?.releases[]?.versionCodes[]?'
+            } | sort -n | tail -n 1)"
+            curl -fsS -X DELETE -H "$auth" "$api/$edit" > /dev/null
+            if [ -n "$highest" ] && [ "$highest" -ge "$code" ]; then
+              code=$((highest + 1))
+            fi
+          fi
+          # Written in next to versionName, for this build only.
+          sed -i "s/^\( *\)versionName: .*/\1versionCode: $code\n&/" android-app/module.yaml
+          grep -q "^ *versionCode: $code$" android-app/module.yaml
+          echo "::notice::versionCode $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       # The keystore goes in the runner's temp directory, outside the checkout.
       - name: Write the upload key
@@ -120,6 +163,6 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: dev.ggoggam.hangar
           releaseFiles: hangar-${{ steps.version.outputs.version }}.aab
-          releaseName: ${{ steps.version.outputs.version }}
+          releaseName: ${{ steps.version.outputs.version }} (${{ steps.code.outputs.code }})
           track: ${{ env.TRACK }}
           status: ${{ env.STATUS }}
