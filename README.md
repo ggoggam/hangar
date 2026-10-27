@@ -36,7 +36,9 @@ mise run dev:ios       # an iPhone, else a simulator (macOS only)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pre-commit, the core tests on the JVM and on the iOS
-simulator, and builds both apps, all on GitHub-hosted runners.
+simulator, and builds both apps, all on GitHub-hosted runners. A `v*` tag builds the signed Android
+bundle and uploads it to Google Play (`.github/workflows/release-android.yml`): see
+[RELEASING.md](RELEASING.md).
 
 | Module | What it is |
 |---|---|
