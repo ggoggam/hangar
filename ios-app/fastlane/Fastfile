@@ -1,0 +1,86 @@
+# Hangar's TestFlight lane. Run from ios-app/ with `bundle exec fastlane beta`; Release iOS
+# (.github/workflows/release-ios.yml) runs it from a v<versionName> tag.
+#
+# The version is versionName in android-app/module.yaml, the one place a release is decided. The
+# build number is the commit count, or one past the latest on TestFlight if that's higher, so
+# running it again for the same commit still gets a new one. Both go to xcodebuild as build
+# settings, so the project file isn't changed.
+#
+# Signing is Xcode's automatic (cloud) signing: with the App Store Connect API key and
+# -allowProvisioningUpdates, xcodebuild makes or downloads the certificate and profile itself, so
+# there's no match repo. The key needs the App Manager role to make them the first time.
+
+require "base64"
+require "tempfile"
+
+default_platform(:ios)
+
+def version_name
+  module_yaml = File.expand_path("../../android-app/module.yaml", __dir__)
+  version = File.read(module_yaml)[/^ *versionName: *"(.*)"$/, 1]
+  UI.user_error!("No versionName in #{module_yaml}") unless version
+  version
+end
+
+# The key comes in as ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8_BASE64. It's written to a file
+# because xcodebuild reads the key from disk. Tempfile.create without a block leaves no finalizer
+# to delete the file before xcodebuild gets to it, and the runner is thrown away after.
+def asc_api_key
+  %w[ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64].each do |name|
+    UI.user_error!("#{name} isn't set") if ENV[name].to_s.empty?
+  end
+  key_file = Tempfile.create(["asc_api_key", ".p8"])
+  key_file.write(Base64.decode64(ENV["ASC_KEY_P8_BASE64"]))
+  key_file.close
+  api_key = app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_filepath: key_file.path,
+    in_house: false
+  )
+  { api_key: api_key, path: key_file.path }
+end
+
+platform :ios do
+  desc "Build the signed app and upload it to TestFlight for internal testers"
+  lane :beta do
+    asc = asc_api_key
+    version = version_name
+    commit_count = sh("git rev-list --count HEAD", log: false).strip.to_i
+    latest = latest_testflight_build_number(api_key: asc[:api_key], initial_build_number: 0)
+    build = [commit_count, latest.to_i + 1].max
+    UI.message("Hangar #{version} (#{build})")
+
+    # A temporary keychain for the signing certificate, made the default for this run.
+    setup_ci
+
+    # The archive's xcodebuild doesn't get the API key from fastlane, so it's passed here. The
+    # export does get it, and xcodebuild turns down a second -authenticationKeyPath, so
+    # export_xcargs only allows provisioning.
+    auth_args = [
+      "-allowProvisioningUpdates",
+      "-authenticationKeyPath", asc[:path],
+      "-authenticationKeyID", ENV["ASC_KEY_ID"],
+      "-authenticationKeyIssuerID", ENV["ASC_ISSUER_ID"]
+    ].join(" ")
+
+    build_app(
+      project: "module.xcodeproj",
+      scheme: "app",
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{build} #{auth_args}",
+      export_xcargs: "-allowProvisioningUpdates",
+      output_directory: "build/ios",
+      output_name: "hangar-#{version}-#{build}.ipa",
+      clean: true
+    )
+
+    upload_to_testflight(
+      api_key: asc[:api_key],
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      changelog: "Hangar #{version} (#{build})"
+    )
+  end
+end

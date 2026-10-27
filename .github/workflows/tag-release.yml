@@ -1,8 +1,8 @@
 name: Tag release
 
 # versionName in android-app/module.yaml is the one place a release is decided. When CI passes on
-# main and there's no v<versionName> tag yet, this tags that commit and starts Release Android from
-# the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
+# main and there's no v<versionName> tag yet, this tags that commit and starts Release Android and
+# Release iOS from the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
 # workflow_dispatch, which is the one event that token can start.
 on:
   workflow_run:
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the tag
-      actions: write # start Release Android
+      actions: write # start the releases
     env:
       SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
@@ -64,3 +64,11 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           TRACK: ${{ vars.PLAY_TRACK || 'alpha' }}
         run: gh workflow run release-android.yml --ref "$TAG" -f track="$TRACK"
+
+      # Even if starting Release Android failed, so one platform doesn't hold up the other.
+      - name: Start Release iOS
+        if: ${{ !cancelled() && steps.tag.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh workflow run release-ios.yml --ref "$TAG"
