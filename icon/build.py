@@ -10,8 +10,8 @@ colour or shape, since Hangar isn't Fly.io's app.
 The mark is drawn on Android's 108 dp adaptive icon canvas. A launcher shows the middle 72 dp, and
 the mark stays inside the 66 dp safe zone that every mask keeps. iOS gets the same 72 dp square.
 
-Writes the Android foreground (also the themed icon's monochrome layer) and the iOS icon's light,
-dark and tinted images. The rest of the icon (the adaptive icon, its background colour and the
+Writes the Android foreground (also the themed icon's monochrome layer), the iOS icon's light,
+dark and tinted images, and the light and dark logos the README shows. The rest of the icon (the adaptive icon, its background colour and the
 asset catalogue's Contents.json) is written by hand.
 
 Run with `mise run icon`.
@@ -25,6 +25,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 ANDROID = ROOT / "android-app" / "res" / "drawable" / "ic_launcher_foreground.xml"
 IOS = ROOT / "ios-app" / "src" / "Assets.xcassets" / "AppIcon.appiconset"
+LOGO = ROOT / "icon"
 
 CENTRE = 54  # of the 108 dp canvas
 RADIUS = 21  # the roof: 58% of the 72 dp a launcher shows
@@ -42,6 +43,8 @@ PAPER = "#FAFAFA"
 IOS_SIZE = 1024
 SUPERSAMPLE = 4
 VIEWPORT = (18, 72)
+# The README's logo is the iOS square with its corners rounded, about as much as a home screen does.
+LOGO_CORNER = 16
 
 
 def outline():
@@ -131,7 +134,24 @@ def write_ios():
     render("#000000", "#FFFFFF").convert("L").save(IOS / "AppIcon-tinted.png", optimize=True)
 
 
+def logo(background, ink):
+    origin, span = VIEWPORT
+    return f"""<!-- Written by icon/build.py; change the icon there. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="{origin} {origin} {span} {span}" width="128" height="128">
+  <rect x="{origin}" y="{origin}" width="{span}" height="{span}" rx="{LOGO_CORNER}" fill="{background}"/>
+  <path fill="{ink}" d="{path_data()}"/>
+</svg>
+"""
+
+
+def write_logo():
+    # The same pair as the iOS icon: the README picks one by the reader's GitHub theme.
+    (LOGO / "logo.svg").write_text(logo(PAPER, INK))
+    (LOGO / "logo-dark.svg").write_text(logo(INK, PAPER))
+
+
 if __name__ == "__main__":
     write_android()
     write_ios()
-    print(f"Wrote {ANDROID.relative_to(ROOT)} and {IOS.relative_to(ROOT)}")
+    write_logo()
+    print(f"Wrote {ANDROID.relative_to(ROOT)}, {IOS.relative_to(ROOT)} and {LOGO.relative_to(ROOT)}/logo*.svg")
