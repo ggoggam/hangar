@@ -1,0 +1,74 @@
+name: Tag release
+
+# versionName in android-app/module.yaml is the one place a release is decided. When CI passes on
+# main and there's no v<versionName> tag yet, this tags that commit and starts Release Android and
+# Release iOS from the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
+# workflow_dispatch, which is the one event that token can start.
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: tag
+    # Pushes to main only, not pull requests or the merge queue.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag
+      actions: write # start the releases
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SHA }}
+
+      # versionCode isn't checked here: Release Android works it out.
+      - name: Tag a new version
+        id: tag
+        run: |
+          version="$(sed -n 's/^ *versionName: *"\(.*\)"$/\1/p' android-app/module.yaml)"
+          if [ -z "$version" ]; then
+            echo "::error::Couldn't read versionName from android-app/module.yaml."
+            exit 1
+          fi
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already tagged, so there's nothing to release."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Hangar $version" "$SHA"
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Start Release Android
+        if: steps.tag.outputs.tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          TRACK: ${{ vars.PLAY_TRACK || 'alpha' }}
+        run: gh workflow run release-android.yml --ref "$TAG" -f track="$TRACK"
+
+      # Even if starting Release Android failed, so one platform doesn't hold up the other.
+      - name: Start Release iOS
+        if: ${{ !cancelled() && steps.tag.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh workflow run release-ios.yml --ref "$TAG"

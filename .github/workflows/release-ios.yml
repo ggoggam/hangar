@@ -1,0 +1,87 @@
+name: Release iOS
+
+# Builds the signed iOS app from a v<versionName> tag and uploads it to TestFlight for internal
+# testers, with fastlane's beta lane (ios-app/fastlane/Fastfile). Tag release makes the tag when a
+# new versionName passes CI on main and starts this; a pushed tag starts it too. Running it by hand
+# from main builds main as it is, with the versionName it has and a new build number, for a build
+# that doesn't need a version bump. Sending a build on from TestFlight (external testers, the App
+# Store) is done in App Store Connect.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancelled halfway through an upload.
+concurrency:
+  group: release-ios
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: macos-latest
+    # The App Store Connect API key is a secret of this environment, so its deployment rules decide
+    # which refs can use it.
+    environment: app-store
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The whole history, since the commit count is the build number.
+          fetch-depth: 0
+
+      # Every build on TestFlight is main or a tag that says what module.yaml says.
+      - name: Check the version
+        run: |
+          version="$(sed -n 's/^ *versionName: *"\(.*\)"$/\1/p' android-app/module.yaml)"
+          case "$GITHUB_REF_TYPE/$GITHUB_REF_NAME" in
+            "tag/v$version" | branch/main) ;;
+            tag/*)
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName $version in android-app/module.yaml."
+              exit 1
+              ;;
+            *)
+              echo "::error::Releases are built from main or a v* tag. Run this from one of those, not $GITHUB_REF_NAME."
+              exit 1
+              ;;
+          esac
+
+      # The Kotlin framework and the app link against the same iOS SDK, so both use this Xcode.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Restores the CI ios job's toolchain cache but never saves one, so a release can't change
+      # what CI builds with.
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/Library/Caches/JetBrains/Kotlin
+            ~/.konan
+          key: kotlin-${{ runner.os }}-ios-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          restore-keys: |
+            kotlin-${{ runner.os }}-ios-
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          working-directory: ios-app
+          bundler-cache: true
+
+      - name: Build and upload to TestFlight
+        working-directory: ios-app
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: bundle exec fastlane beta
+
+      # The ipa and its dSYMs, for symbolicating crash reports from this build.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hangar-ios-${{ github.ref_name }}-${{ github.run_number }}
+          path: ios-app/build/ios/
+          if-no-files-found: error

@@ -36,9 +36,10 @@ mise run dev:ios       # an iPhone, else a simulator (macOS only)
 ```
 
 CI (`.github/workflows/ci.yml`) runs pre-commit, the core tests on the JVM and on the iOS
-simulator, and builds both apps, all on GitHub-hosted runners. A `v*` tag builds the signed Android
-bundle and uploads it to Google Play (`.github/workflows/release-android.yml`): see
-[RELEASING.md](RELEASING.md).
+simulator, and builds both apps, all on GitHub-hosted runners. Merging a new `versionName` tags it
+(`.github/workflows/tag-release.yml`), and a `v*` tag builds the signed Android bundle and uploads
+it to Google Play (`.github/workflows/release-android.yml`), and builds the iOS app and uploads it
+to TestFlight with fastlane (`.github/workflows/release-ios.yml`): see [RELEASING.md](RELEASING.md).
 
 | Module | What it is |
 |---|---|

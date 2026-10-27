@@ -7,3 +7,7 @@ xcuserdata/
 local.properties
 android-app/keystore.properties
 android-app/*.keystore
+# What fastlane writes after each run (ios-app/fastlane).
+ios-app/fastlane/report.xml
+ios-app/fastlane/README.md
+ios-app/fastlane/test_output/
