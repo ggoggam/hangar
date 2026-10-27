@@ -55,8 +55,15 @@ platform :ios do
     build = [commit_count, latest.to_i + 1].max
     UI.message("Hangar #{version} (#{build})")
 
-    # The export gets the API key from fastlane as -authenticationKey* flags, so export_xcargs
-    # only allows provisioning: xcodebuild turns down a second -authenticationKeyPath.
+    # gym doesn't hand fastlane's API key to xcodebuild, so the export gets it here. Without it
+    # the export has no account to sign with ("No Accounts").
+    export_auth = [
+      "-allowProvisioningUpdates",
+      "-authenticationKeyPath", asc[:path],
+      "-authenticationKeyID", ENV["ASC_KEY_ID"],
+      "-authenticationKeyIssuerID", ENV["ASC_ISSUER_ID"]
+    ].join(" ")
+
     build_app(
       project: "module.xcodeproj",
       scheme: "app",
@@ -64,7 +71,7 @@ platform :ios do
       export_method: "app-store",
       export_team_id: "8Z7776X9Y4",
       xcargs: "MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{build} CODE_SIGNING_ALLOWED=NO",
-      export_xcargs: "-allowProvisioningUpdates",
+      export_xcargs: export_auth,
       output_directory: "build/ios",
       output_name: "hangar-#{version}-#{build}.ipa",
       clean: true
