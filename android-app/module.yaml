@@ -9,8 +9,8 @@ settings:
     namespace: dev.ggoggam.hangar
     applicationId: dev.ggoggam.hangar
     minSdk: 31
-    # Bump both for each Play release: Play turns down a versionCode it has seen, and the release
-    # workflow checks that the tag is v<versionName>. See RELEASING.md.
+    # Bump both for each Play release: merging a new versionName to main tags v<versionName> and
+    # releases it, and Play turns down a versionCode it has seen. See RELEASING.md.
     versionCode: 1
     versionName: "0.1.0"
     # Release builds are signed with the upload key in keystore.properties, which only the release

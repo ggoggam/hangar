@@ -1,0 +1,80 @@
+name: Tag release
+
+# versionName in android-app/module.yaml is the one place a release is decided. When CI passes on
+# main and there's no v<versionName> tag yet, this tags that commit and starts Release Android from
+# the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
+# workflow_dispatch, which is the one event that token can start.
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: tag
+    # Pushes to main only, not pull requests or the merge queue.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag
+      actions: write # start Release Android
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SHA }}
+          # Every tag, so the versionCode can be checked against the last release's.
+          fetch-depth: 0
+
+      # The tags ruleset blocks deleting v* tags, so a release Play would turn down is stopped here
+      # rather than tagged.
+      - name: Tag a new version
+        id: tag
+        run: |
+          version_code() { sed -n 's/^ *versionCode: *\([0-9]*\)$/\1/p'; }
+          version="$(sed -n 's/^ *versionName: *"\(.*\)"$/\1/p' android-app/module.yaml)"
+          code="$(version_code < android-app/module.yaml)"
+          if [ -z "$version" ] || [ -z "$code" ]; then
+            echo "::error::Couldn't read versionName and versionCode from android-app/module.yaml."
+            exit 1
+          fi
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "$tag is already tagged, so there's nothing to release."
+            exit 0
+          fi
+
+          previous="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+          if [ -n "$previous" ]; then
+            previous_code="$(git show "$previous:android-app/module.yaml" | version_code)"
+            if [ "$code" -le "$previous_code" ]; then
+              echo "::error::versionCode $code isn't above $previous's $previous_code, and Play turns down a versionCode it has seen. Bump it in android-app/module.yaml."
+              exit 1
+            fi
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Hangar $version" "$SHA"
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Start Release Android
+        if: steps.tag.outputs.tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          TRACK: ${{ vars.PLAY_TRACK || 'alpha' }}
+        run: gh workflow run release-android.yml --ref "$TAG" -f track="$TRACK"

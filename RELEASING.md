@@ -1,23 +1,24 @@
 # Releasing to Google Play
 
 `.github/workflows/release-android.yml` builds the app bundle from a `v*` tag, signs it with the
-upload key and uploads it to Google Play. Most of the work is the one-time setup below; after that,
-a release is a version bump and a tag.
+upload key and uploads it to Google Play. `.github/workflows/tag-release.yml` makes that tag when
+a new `versionName` reaches `main`. Most of the work is the one-time setup below; after that, a
+release is a merged version bump.
 
 ## Releasing a version
 
-1. In a pull request, bump `versionName` and `versionCode` in `android-app/module.yaml`. Play
-   turns down a `versionCode` it has seen before, in any track, so it goes up by one every time,
-   even for a build that never left closed testing.
-2. Once it's merged, tag the merge commit and push the tag:
+In a pull request, bump `versionName` and `versionCode` in `android-app/module.yaml`. Play turns
+down a `versionCode` it has seen before, in any track, so it goes up by one every time, even for a
+build that never left closed testing.
 
-   ```sh
-   git tag v0.1.1 && git push origin v0.1.1
-   ```
+Once it's merged and CI passes on `main`, **Tag release** tags the merge commit `v` plus
+`versionName` and starts **Release Android** from that tag. Release Android builds the signed
+bundle, keeps it as the run's artifact and uploads it to the track in the `PLAY_TRACK` repository
+variable (closed testing if it's unset). A merge that leaves `versionName` alone releases nothing.
 
-The workflow checks that the tag is `v` plus `versionName`, builds the signed bundle, keeps it as
-the run's artifact and uploads it to the track in the `PLAY_TRACK` repository variable (closed
-testing if it's unset).
+Tag release stops without tagging if `versionCode` isn't above the last release tag's, since the
+tags ruleset keeps a `v*` tag from being deleted once it's pushed. Pushing a `v*` tag yourself
+still starts a release, and Release Android checks that it matches `versionName`.
 
 To send a tag somewhere else, run **Release Android** by hand from the Actions tab, pick the tag
 under "Use workflow from", and choose a track: `internal`, `alpha` (closed testing), `production`,

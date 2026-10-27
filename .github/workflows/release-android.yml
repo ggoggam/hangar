@@ -1,7 +1,9 @@
 name: Release Android
 
-# Builds the signed app bundle from a v<versionName> tag and uploads it to Google Play. A pushed tag
-# goes to the track in the PLAY_TRACK repository variable, closed testing ("alpha") if it's unset.
+# Builds the signed app bundle from a v<versionName> tag and uploads it to Google Play. Tag release
+# makes the tag when a new versionName passes CI on main and starts this with the PLAY_TRACK track.
+# A pushed tag goes to the track in the PLAY_TRACK repository variable, closed testing ("alpha") if
+# it's unset.
 # Running it by hand from a tag picks the track. "none" only builds the bundle, which is how the
 # first one gets to Play Console, since Play takes no API uploads before that (see RELEASING.md).
 on:
