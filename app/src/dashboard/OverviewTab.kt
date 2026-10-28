@@ -58,10 +58,18 @@ import org.jetbrains.compose.resources.stringResource
 internal fun LazyListScope.overview(
     state: DashboardState,
     onWindow: (MetricsWindow) -> Unit,
+    onRestartApp: (rolling: Boolean) -> Unit,
 ) {
     // Only when there are some: a quiet app shouldn't carry an empty warning, or a failed one.
     state.hostIssues.value?.let { issues -> items(issues, key = { "host:${it.internalId}" }) { HostIssueCard(it) } }
-    section(state.app, "app") { app -> item(key = "app") { AppCard(app, state.machines.value) } }
+    section(state.app, "app") { app ->
+        item(key = "app") { AppCard(app, state.machines.value) }
+        state.machines.value?.let { machines ->
+            item(key = "app:restart") {
+                AppRestartControl(app.name, machines.count { it.state == "started" }, state.appRestart, onRestartApp)
+            }
+        }
+    }
 
     item(key = "metrics:title") {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

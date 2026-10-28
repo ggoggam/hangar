@@ -34,16 +34,27 @@ import dev.ggoggam.hangar.core.FlyMachineEvent
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Instant
 
-internal fun LazyListScope.machines(machines: Load<List<FlyMachine>>) {
+/** The app's machines, each with its actions; [busy] holds the ones an action is under way on. */
+internal fun LazyListScope.machines(
+    machines: Load<List<FlyMachine>>,
+    busy: Map<String, Action>,
+    onAction: (FlyMachine, Action) -> Unit,
+) {
     section(machines, "machines", placeholders = 3) { list ->
         if (list.isEmpty()) item(key = "machines:empty") { Muted(stringResource(Res.string.machines_empty)) }
         // Grouped by process group the way `fly status` lists them, then by region.
-        items(list.sortedWith(compareBy({ it.processGroup }, { it.region }, { it.id })), key = { "machine:${it.id}" }) { MachineCard(it) }
+        items(list.sortedWith(compareBy({ it.processGroup }, { it.region }, { it.id })), key = { "machine:${it.id}" }) {
+            MachineCard(it, busy[it.id], onAction)
+        }
     }
 }
 
 @Composable
-private fun MachineCard(m: FlyMachine) {
+private fun MachineCard(
+    m: FlyMachine,
+    busy: Action?,
+    onAction: (FlyMachine, Action) -> Unit,
+) {
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -56,6 +67,7 @@ private fun MachineCard(m: FlyMachine) {
                 )
             }
             StatusBadge(m.state, machineTone(m.state))
+            MachineMenu(m, busy, onAction)
         }
         Text(
             listOfNotNull(

@@ -7,10 +7,13 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -36,18 +39,22 @@ val FlyToken.isDemo: Boolean get() = this == DEMO_TOKEN
  * the network: what the screens get while [DEMO_TOKEN] is signed in, so the app can be tried, and
  * reviewed for Google Play, without a Fly.io account. Each answer is the JSON the real endpoint
  * sends, so the demo runs the same code as a real session. Logs and metrics follow [nowSeconds], so
- * they move as real ones do.
+ * they move as real ones do. Starting, stopping and restarting machines take effect for as long as
+ * the client lasts.
  */
-fun flyDemoHttpClient(nowSeconds: () -> Long = { Clock.System.now().epochSeconds }): HttpClient =
-    HttpClient(MockEngine { request -> respondDemo(request, nowSeconds()) })
+fun flyDemoHttpClient(nowSeconds: () -> Long = { Clock.System.now().epochSeconds }): HttpClient {
+    val states = MutableStateFlow(emptyMap<String, String>())
+    return HttpClient(MockEngine { request -> respondDemo(request, nowSeconds(), states) })
+}
 
 private fun MockRequestHandleScope.respondDemo(
     request: HttpRequestData,
     now: Long,
+    states: MutableStateFlow<Map<String, String>>,
 ): HttpResponseData {
     val body =
         try {
-            FlyDemo(now).answer(request)
+            FlyDemo(now, states).answer(request)
         } catch (e: NotInDemo) {
             null
         }
@@ -63,6 +70,8 @@ private class NotInDemo : Exception()
 
 private class FlyDemo(
     private val now: Long,
+    /** Machines' states as the demo's actions left them, by id. */
+    private val states: MutableStateFlow<Map<String, String>>,
 ) {
     fun answer(request: HttpRequestData): JsonElement? {
         val url = request.url
@@ -85,6 +94,15 @@ private class FlyDemo(
             }
 
             MACHINES_HOST -> {
+                MACHINE.matchEntire(path)?.let {
+                    val app = app(it.groupValues[1])
+                    val m = app.machines.firstOrNull { m -> m.id == it.groupValues[2] } ?: throw NotInDemo()
+                    return machineAction(app, m, it.groupValues[3], request.method)
+                }
+                APP.matchEntire(path)?.let {
+                    val app = app(it.groupValues[1])
+                    return obj("name" to app.name, "app_role" to if (app.postgres) "postgres_cluster" else "")
+                }
                 MACHINES_API.matchEntire(path)?.let {
                     val app = app(it.groupValues[1])
                     return when (it.groupValues[2]) {
@@ -271,6 +289,51 @@ private class FlyDemo(
 
     // The Machines API.
 
+    private fun stateOf(m: DemoMachine) = states.value[m.id] ?: m.state
+
+    /** One machine, or what `fly machine start|stop|suspend|restart` and their leases and waits get. */
+    private fun machineAction(
+        app: DemoApp,
+        m: DemoMachine,
+        action: String,
+        method: HttpMethod,
+    ): JsonElement {
+        fun set(state: String) = states.update { it + (m.id to state) }
+        return when (action) {
+            "" -> {
+                j(machine(app, m))
+            }
+
+            "/lease" -> {
+                if (method == HttpMethod.Delete) obj() else obj("status" to "success", "data" to mapOf("nonce" to "demo-${m.id}"))
+            }
+
+            "/wait" -> {
+                obj("ok" to true)
+            }
+
+            "/start" -> {
+                obj("status" to "success", "previous_state" to stateOf(m)).also { set("started") }
+            }
+
+            "/stop" -> {
+                obj().also { set("stopped") }
+            }
+
+            "/suspend" -> {
+                obj().also { set("suspended") }
+            }
+
+            "/restart" -> {
+                obj().also { set("started") }
+            }
+
+            else -> {
+                throw NotInDemo()
+            }
+        }
+    }
+
     private fun machine(
         app: DemoApp,
         m: DemoMachine,
@@ -279,7 +342,7 @@ private class FlyDemo(
         return mapOf(
             "id" to m.id,
             "name" to m.name,
-            "state" to m.state,
+            "state" to stateOf(m),
             "region" to m.region,
             "host_status" to "ok",
             "created_at" to iso(started - 20 * DAY),
@@ -299,7 +362,7 @@ private class FlyDemo(
                         app.volumes.filter { it.machine == m.id }.map { mapOf("volume" to it.id, "path" to "/data", "name" to it.name) },
                 ),
             "checks" to
-                if (m.check == null || m.state != "started") {
+                if (m.check == null || stateOf(m) != "started") {
                     emptyList()
                 } else {
                     listOf(mapOf("name" to m.check, "status" to "passing", "output" to "OK", "updated_at" to iso(now - 12)))
@@ -387,7 +450,7 @@ private class FlyDemo(
         cursor: String?,
         instance: String?,
     ): JsonElement {
-        val machines = app.machines.filter { it.state == "started" && (instance == null || it.id == instance) }
+        val machines = app.machines.filter { stateOf(it) == "started" && (instance == null || it.id == instance) }
         val since = cursor?.removePrefix("demo-")?.toLongOrNull()
         val entries = mutableListOf<Map<String, Any?>>()
         if (machines.isNotEmpty()) {
@@ -445,7 +508,7 @@ private class FlyDemo(
                 ?.groupValues
                 ?.get(1)
                 ?.let { name -> APPS.firstOrNull { it.name == name } }
-        val running = app?.machines?.filter { it.state == "started" }.orEmpty()
+        val running = app?.machines?.filter { stateOf(it) == "started" }.orEmpty()
         val value: ((Long) -> Double)? =
             when {
                 app == null || running.isEmpty() -> null
@@ -563,6 +626,8 @@ private class FlyDemo(
         val PROMETHEUS = Regex("/prometheus/([^/]+)/api/v1/(query|query_range)")
         val OLDER_POSTGRES = Regex("/api/v1/organizations/([^/]+)/postgres")
         val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates)")
+        val MACHINE = Regex("/v1/apps/([^/]+)/machines/([^/]+)(|/lease|/wait|/start|/stop|/suspend|/restart)")
+        val APP = Regex("/v1/apps/([^/]+)")
         val OPERATION = Regex("""query\s+(\w+)""")
         val APP_LABEL = Regex("""app="([^"]+)"""")
         val WINDOW = Regex("""\[(\d+)s""")
