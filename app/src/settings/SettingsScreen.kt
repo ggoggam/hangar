@@ -35,6 +35,7 @@ import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
 import dev.ggoggam.hangar.app.watch.WatchSettings
+import dev.ggoggam.hangar.app.watch.checksDetail
 import dev.ggoggam.hangar.app.watch.rememberNotificationPermission
 import dev.ggoggam.hangar.core.FlyOrganization
 import org.jetbrains.compose.resources.stringResource
@@ -139,7 +140,7 @@ private fun Notifications(watch: WatchSettings) {
     SettingRow(
         stringResource(Res.string.settings_checks),
         icon = Lucide.Bell,
-        detail = stringResource(if (denied) Res.string.settings_checks_denied else Res.string.settings_checks_detail),
+        detail = stringResource(if (denied) Res.string.settings_checks_denied else checksDetail),
         onClick = {
             if (on) {
                 watch.setEnabled(false)

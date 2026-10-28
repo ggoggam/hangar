@@ -183,6 +183,7 @@
     <string name="settings_notifications">알림</string>
     <string name="settings_checks">백그라운드 확인</string>
     <string name="settings_checks_detail">약 15분마다 Fly.io를 확인하고 새 문제가 생기면 알려 드려요</string>
+    <string name="settings_checks_detail_ios">iOS가 허용할 때 확인해요. 자주 열지 않으면 뜸해지고, 강제 종료하면 멈춰요</string>
     <string name="settings_checks_denied">Hangar 알림이 꺼져 있어요. 먼저 시스템 설정에서 켜 주세요.</string>
     <string name="settings_notify_incidents">Fly.io 장애</string>
     <string name="settings_notify_incidents_detail">장애가 발생하거나 해결되었을 때</string>

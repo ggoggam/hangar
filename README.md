@@ -45,7 +45,7 @@ to TestFlight with fastlane (`.github/workflows/release-ios.yml`): see [RELEASIN
 |---|---|
 | `core` | Fly.io's login, GraphQL, Machines API, Managed Postgres, logs, metrics and incidents clients on Ktor. Pure Kotlin, tested on the JVM in CI. |
 | `app` | Compose Multiplatform UI and the platform services behind it: token storage, settings, the sign-in sheet. |
-| `android-app`, `ios-app` | Entry points. iOS's Keychain and ASWebAuthenticationSession are Swift bridges in `ios-app/src`. |
+| `android-app`, `ios-app` | Entry points. iOS's Keychain and ASWebAuthenticationSession are Swift bridges in `ios-app/src`; background refresh and notifications are called from Kotlin (`app/src@ios/watch`). |
 
 ## Login
 
@@ -138,7 +138,10 @@ Turned on in Settings, Hangar checks Fly.io in the background and notifies you o
 since it last looked (`core/src/FlyWatch.kt`). There's no push server: the phone itself asks
 Fly.io, the same calls the screens make, and posts the notifications. On Android, WorkManager runs
 the check about every 15 minutes while there's a network, though Doze and battery saver can hold
-it back.
+it back. On iOS it's a `BGAppRefreshTask`, asked for no sooner than 15 minutes apart, which iOS
+runs when it judges best: a few times a day for an app you open often, rarely for one you don't,
+and not at all after you force-quit it, until you open it again. Without a server sending pushes
+through APNs, that's as often as iOS lets an app look. The Settings switch says so on iOS.
 
 | Notification | Source |
 |---|---|
@@ -174,7 +177,9 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   be sent anywhere else. The background checks call the same hosts. On Android the only
   permissions it asks for are `INTERNET`, and `POST_NOTIFICATIONS` when you turn the background
   checks on; WorkManager adds the ones it needs to run and reschedule them (`WAKE_LOCK`,
-  `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`). "Try the
+  `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`). On iOS it asks to
+  send notifications at the same point, and declares the `fetch` background mode for background
+  refresh. "Try the
   demo" connects to nothing: while it's signed in, the screens get a client that answers every
   call from sample data built into the app (`core/src/FlyDemo.kt`).
 - **What it sends.** Your Fly.io token, to Fly.io. When you sign in, a name for the login
