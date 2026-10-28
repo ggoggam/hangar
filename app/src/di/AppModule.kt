@@ -1,5 +1,6 @@
 package dev.ggoggam.hangar.app.di
 
+import dev.ggoggam.hangar.app.apps.AppPins
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.login.LoginViewModel
@@ -51,13 +52,14 @@ private val appModule =
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
         single { WatchSettings(get()) }
+        single { AppPins(get()) }
         single { NotificationLinks() }
         // Always the live client: the demo is never checked in the background.
         single { Watcher(get(LIVE_HTTP), get(), get(), get()) }
         // Fetches through the screens' client as each load starts, so the demo's never reaches the network.
         single { IncidentFeed { FlyIncidents(get()).active() } }
         viewModel { LoginViewModel(get(), get(), get(LIVE_HTTP), get(), get(SESSION_NAME)) }
-        viewModel { AppsViewModel(get(), get(), get()) }
+        viewModel { AppsViewModel(get(), get(), get(), get()) }
         viewModel { StorageViewModel(get(), get()) }
         viewModel { SettingsViewModel(get(), get()) }
         viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }

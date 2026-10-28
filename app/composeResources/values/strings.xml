@@ -21,6 +21,13 @@
     <string name="apps_empty">No apps in your organizations yet.</string>
     <string name="apps_failed">Couldn't load your apps.</string>
     <string name="apps_retry">Retry</string>
+    <string name="apps_search">Search apps</string>
+    <string name="apps_search_clear">Clear search</string>
+    <string name="apps_no_matches">No apps match “%1$s”.</string>
+    <string name="apps_pinned">Pinned</string>
+    <string name="apps_pin">Pin to top</string>
+    <string name="apps_unpin">Unpin</string>
+    <string name="apps_pin_hint">Touch and hold an app to pin it to the top.</string>
     <string name="status_deployed">Deployed</string>
     <string name="status_pending">Pending</string>
     <string name="status_suspended">Suspended</string>

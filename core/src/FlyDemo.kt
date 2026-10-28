@@ -683,8 +683,8 @@ private fun j(value: Any?): JsonElement =
         else -> error("not JSON: $value")
     }
 
-// The sample data: a personal organization with a small blog and a team running an API, a website,
-// a worker and their databases.
+// The sample data: a personal organization with a small blog and a few side projects, and a team
+// running an API, a website, a worker, their databases and some smaller apps.
 
 private const val EMAIL = "demo@example.com"
 
@@ -928,6 +928,102 @@ private val APPS =
             } else {
                 "info" to "LOG:  duration: ${1 + n % 30}.${n % 1000} ms  statement: SELECT * FROM orders WHERE customer_id = \$1"
             }
+        },
+        // Smaller apps, so the list is long enough to search and pin in.
+        DemoApp(
+            name = "api-staging",
+            org = TEAM,
+            releases = 64,
+            machines = listOf(DemoMachine("0e9c3a71d4b852", "pale-dawn-6103", "nrt", memoryMb = 512)),
+            hostnames = listOf("staging.api.example.com"),
+            cpuPercent = 4.0,
+            memoryShare = 0.38,
+            requestsPerMinute = 6.0,
+            p95Millis = 92.0,
+            bytesOutPerDay = 15e6,
+            linesPerSecond = 0.08,
+        ) { _, n ->
+            "info" to
+                """{"level":"info","msg":"request","method":"GET","path":"${PATHS[n % PATHS.size]}","status":200,"duration_ms":${10 + n % 80}}"""
+        },
+        DemoApp(
+            name = "admin",
+            org = TEAM,
+            releases = 22,
+            machines = listOf(DemoMachine("5b07e2d9c81f43", "sharp-reed-2215", "nrt", memoryMb = 512)),
+            hostnames = listOf("admin.example.com"),
+            cpuPercent = 2.0,
+            memoryShare = 0.33,
+            requestsPerMinute = 3.0,
+            p95Millis = 58.0,
+            bytesOutPerDay = 8e6,
+            linesPerSecond = 0.05,
+        ) { _, n ->
+            val page = listOf("/orders", "/customers", "/refunds", "/login")[n % 4]
+            "info" to "GET $page 200 ${12 + n % 70}ms"
+        },
+        DemoApp(
+            name = "docs",
+            org = TEAM,
+            releases = 118,
+            machines =
+                listOf(
+                    DemoMachine("a4f16c0e92d375", "green-hill-3348", "nrt"),
+                    DemoMachine("c27d58b1e0a964", "loud-bay-8801", "ams"),
+                ),
+            hostnames = listOf("docs.example.com"),
+            cpuPercent = 2.0,
+            memoryShare = 0.29,
+            requestsPerMinute = 95.0,
+            p95Millis = 12.0,
+            bytesOutPerDay = 1.1e9,
+            linesPerSecond = 0.25,
+        ) { _, n ->
+            val page = listOf("/", "/quickstart", "/api/orders", "/api/webhooks", "/search.json")[n % 5]
+            "info" to "GET $page ${if (n % 41 == 0) 404 else 200} ${1 + n % 6}ms"
+        },
+        DemoApp(
+            name = "image-resizer",
+            org = TEAM,
+            releases = 9,
+            machines =
+                listOf(
+                    DemoMachine("31c8f0a5e7d290", "cool-sand-5527", "nrt", cpuKind = "performance", memoryMb = 2048, check = null),
+                ),
+            cpuPercent = 18.0,
+            memoryShare = 0.52,
+            requestsPerMinute = 40.0,
+            p95Millis = 210.0,
+            bytesOutPerDay = 3.2e9,
+            linesPerSecond = 0.2,
+        ) { _, n ->
+            "info" to "resized ${1000 + n}.jpg to ${listOf(320, 640, 1280)[n % 3]}w in ${30 + n % 150}ms"
+        },
+        DemoApp(
+            name = "portfolio",
+            org = PERSONAL,
+            releases = 7,
+            machines = listOf(DemoMachine("8d3e61b0f5a927", "soft-wind-1730", "nrt")),
+            hostnames = listOf("demo.example.com"),
+            cpuPercent = 1.0,
+            memoryShare = 0.3,
+            requestsPerMinute = 2.0,
+            p95Millis = 9.0,
+            bytesOutPerDay = 5e6,
+            linesPerSecond = 0.03,
+        ) { _, n ->
+            "info" to "GET ${listOf("/", "/projects", "/contact")[n % 3]} 200 ${1 + n % 5}ms"
+        },
+        DemoApp(
+            name = "discord-bot",
+            org = PERSONAL,
+            releases = 12,
+            machines = listOf(DemoMachine("f60a2c8e13b749", "dry-cliff-4492", "iad", check = null)),
+            cpuPercent = 1.0,
+            memoryShare = 0.4,
+            linesPerSecond = 0.05,
+        ) { _, n ->
+            "info" to "handled /${listOf("status", "deploy", "uptime")[n % 3]} in ${40 + n % 200}ms"
         },
     )
 

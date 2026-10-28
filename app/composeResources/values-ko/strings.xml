@@ -21,6 +21,13 @@
     <string name="apps_empty">아직 조직에 앱이 없습니다.</string>
     <string name="apps_failed">앱 목록을 불러오지 못했습니다.</string>
     <string name="apps_retry">다시 시도</string>
+    <string name="apps_search">앱 검색</string>
+    <string name="apps_search_clear">검색어 지우기</string>
+    <string name="apps_no_matches">‘%1$s’에 맞는 앱이 없어요.</string>
+    <string name="apps_pinned">고정됨</string>
+    <string name="apps_pin">맨 위에 고정</string>
+    <string name="apps_unpin">고정 해제</string>
+    <string name="apps_pin_hint">앱을 길게 누르면 맨 위에 고정할 수 있어요.</string>
     <string name="status_deployed">배포됨</string>
     <string name="status_pending">대기 중</string>
     <string name="status_suspended">일시 중지됨</string>

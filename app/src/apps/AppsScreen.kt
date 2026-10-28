@@ -1,6 +1,6 @@
 package dev.ggoggam.hangar.app.apps
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,23 +14,41 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
+import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.X
 import dev.ggoggam.hangar.app.dashboard.Load
 import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.value
@@ -46,6 +64,8 @@ import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlyAppUsage
 import dev.ggoggam.hangar.core.FlyOrgUsage
+import dev.ggoggam.hangar.core.FlyPins
+import dev.ggoggam.hangar.core.searchApps
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,6 +77,8 @@ fun AppsScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val incidents by vm.incidents.collectAsStateWithLifecycle()
+    val pins by vm.pins.collectAsStateWithLifecycle()
+    var query by rememberSaveable { mutableStateOf("") }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -98,7 +120,7 @@ fun AppsScreen(
                     }
 
                     else -> {
-                        appList(apps, state.usage, onOpen)
+                        appList(apps, state.usage, pins, query, { query = it }, onOpen, vm::togglePin)
                     }
                 }
             }
@@ -106,13 +128,79 @@ fun AppsScreen(
     }
 }
 
+/** Below this many apps there's no search field: the whole list fits on a screen or two. */
+private const val SEARCH_FROM = 8
+
 private fun LazyListScope.appList(
     apps: List<FlyApp>,
     usage: Load<Map<String, FlyOrgUsage>>,
+    pins: FlyPins,
+    query: String,
+    onQuery: (String) -> Unit,
     onOpen: (FlyApp) -> Unit,
+    onPin: (FlyApp) -> Unit,
 ) {
     val byOrg = apps.groupBy { it.organization.slug }
-    // Usage on top, one card per organization since each is billed on its own.
+    val searching = apps.size >= SEARCH_FROM && query.isNotBlank()
+    if (apps.size >= SEARCH_FROM) {
+        item(key = "search") { SearchField(query, onQuery) }
+        if (pins.isEmpty && !searching) {
+            item(key = "pin-hint") {
+                Text(
+                    stringResource(Res.string.apps_pin_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+    }
+    // Usage on top, one card per organization since each is billed on its own. A search leaves it
+    // out, so the matches are right under the field.
+    if (!searching) usageCards(usage, byOrg.keys, showOrg = byOrg.size > 1)
+    val shown = if (searching) searchApps(apps, query) else apps
+    if (shown.isEmpty()) {
+        item(key = "message") { Message(stringResource(Res.string.apps_no_matches, query.trim())) }
+        return
+    }
+    // The pinned apps first, whatever their organization, then the rest under theirs.
+    val (pinned, rest) = pins.split(shown)
+    if (pinned.isNotEmpty()) {
+        item(key = "pinned") { GroupHeader(stringResource(Res.string.apps_pinned)) }
+        items(pinned, key = { "app:${it.name}" }) { app ->
+            val org = app.organization.slug
+            AppRow(
+                app,
+                usage.value?.get(org)?.app(app.name),
+                org = org.takeIf { byOrg.size > 1 },
+                pinned = true,
+                onClick = { onOpen(app) },
+                onPin = { onPin(app) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
+    }
+    rest.groupBy { it.organization.slug }.forEach { (org, inOrg) ->
+        item(key = "org:$org") { GroupHeader(org) }
+        items(inOrg, key = { "app:${it.name}" }) { app ->
+            AppRow(
+                app,
+                usage.value?.get(org)?.app(app.name),
+                org = null,
+                pinned = false,
+                onClick = { onOpen(app) },
+                onPin = { onPin(app) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+private fun LazyListScope.usageCards(
+    usage: Load<Map<String, FlyOrgUsage>>,
+    orgs: Set<String>,
+    showOrg: Boolean,
+) {
     when (usage) {
         Load.Loading -> {
             item(key = "usage:loading") { UsagePlaceholder() }
@@ -130,49 +218,107 @@ private fun LazyListScope.appList(
         }
 
         is Load.Ready -> {
-            byOrg.keys.mapNotNull { usage.value[it] }.forEach { org ->
-                item(key = "usage:${org.org}") { UsageCard(org, showOrg = byOrg.size > 1) }
+            orgs.mapNotNull { usage.value[it] }.forEach { org ->
+                item(key = "usage:${org.org}") { UsageCard(org, showOrg) }
             }
-        }
-    }
-    byOrg.forEach { (org, inOrg) ->
-        item(key = "org:$org") {
-            Text(
-                org,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
-            )
-        }
-        items(inOrg, key = { "app:${it.name}" }) { app ->
-            AppRow(app, usage.value?.get(org)?.app(app.name), onClick = { onOpen(app) })
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         }
     }
 }
 
 @Composable
+private fun GroupHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun SearchField(
+    query: String,
+    onChange: (String) -> Unit,
+) {
+    val focus = LocalFocusManager.current
+    OutlinedTextField(
+        query,
+        onChange,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
+        textStyle = MaterialTheme.typography.bodyMedium,
+        placeholder = { Text(stringResource(Res.string.apps_search), style = MaterialTheme.typography.bodyMedium) },
+        leadingIcon = { Icon(Lucide.Search, contentDescription = null, Modifier.size(18.dp)) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onChange("") }) {
+                    Icon(Lucide.X, stringResource(Res.string.apps_search_clear), Modifier.size(18.dp))
+                }
+            }
+        },
+        singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+    )
+}
+
+/** One app. Touching and holding it offers to pin it to the top of the list, or to unpin it. */
+@Composable
 private fun AppRow(
     app: FlyApp,
     usage: FlyAppUsage?,
+    /** Its organization, for a pinned app among several organizations'; null to leave it out. */
+    org: String?,
+    pinned: Boolean,
     onClick: () -> Unit,
+    onPin: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(app.name, style = MaterialTheme.typography.bodyLarge)
-            usage?.let { AppUsageLine(it) }
+    var menu by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    val pinLabel = stringResource(if (pinned) Res.string.apps_unpin else Res.string.apps_pin)
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClickLabel = pinLabel,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menu = true
+                    },
+                ).padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(app.name, style = MaterialTheme.typography.bodyLarge)
+                if (org != null || usage != null) AppUsageLine(org, usage)
+            }
+            StatusBadge(appStatusLabel(app.status), appStatusTone(app.status))
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp).size(18.dp),
+            )
         }
-        StatusBadge(appStatusLabel(app.status), appStatusTone(app.status))
-        Icon(
-            Lucide.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 8.dp).size(18.dp),
-        )
+        DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = MaterialTheme.colorScheme.surface) {
+            DropdownMenuItem(
+                text = { Text(pinLabel) },
+                leadingIcon = {
+                    Icon(
+                        if (pinned) Lucide.PinOff else Lucide.Pin,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                onClick = {
+                    menu = false
+                    onPin()
+                },
+            )
+        }
     }
 }
 
@@ -218,14 +364,18 @@ private fun UsagePlaceholder() {
     }
 }
 
-/** An app's share: its estimated cost, Machine hours and data out, whichever it has. */
+/** An app's [org], when given, and its share: its estimated cost, Machine hours and data out, whichever it has. */
 @Composable
-private fun AppUsageLine(usage: FlyAppUsage) {
+private fun AppUsageLine(
+    org: String?,
+    usage: FlyAppUsage?,
+) {
     val parts =
         listOfNotNull(
-            stringResource(Res.string.usage_estimate, usd(usage.estimatedUsd)),
-            usage.machineSeconds.takeIf { it > 0 }?.let { stringResource(Res.string.usage_hours, decimal(it / 3_600)) },
-            usage.dataOutBytes.takeIf { it >= 1024 }?.let { bytes(it) },
+            org,
+            usage?.let { stringResource(Res.string.usage_estimate, usd(it.estimatedUsd)) },
+            usage?.machineSeconds?.takeIf { it > 0 }?.let { stringResource(Res.string.usage_hours, decimal(it / 3_600)) },
+            usage?.dataOutBytes?.takeIf { it >= 1024 }?.let { bytes(it) },
         )
     Text(
         parts.joinToString(" · "),

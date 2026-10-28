@@ -43,6 +43,8 @@ device's browser, and the app only receives the code Fly.io shows afterwards.
 - For background checks, what the last check saw: the names of Fly.io's open incidents, which
   Fly.io publishes, and one-way fingerprints of the problems it has already told you about, which
   don't contain your app, machine, volume or organization names.
+- Which apps you pinned to the top of the app list, as one-way fingerprints of their names, which
+  don't contain the names.
 
 Your email address, apps, logs and metrics are held in memory while they're on screen, as are
 your secrets' names and digests; their values are never asked for. The app
