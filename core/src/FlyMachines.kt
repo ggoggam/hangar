@@ -1,6 +1,7 @@
 package dev.ggoggam.hangar.core
 
 import io.ktor.client.HttpClient
+import io.ktor.http.encodeURLPathPart
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -46,6 +47,20 @@ class FlyMachines(
 
     suspend fun certificates(app: String): List<FlyCertificate> =
         http.getJson<Certificates>("$machinesUrl/v1/apps/$app/certificates", token.machinesHeader).certificates
+
+    /**
+     * One hostname's certificates, validation and the DNS records it needs: fly-go's
+     * `flaps.GetCertificate`, the details `fly certs show` prints. flyctl gets them from
+     * `POST …/check`, which also validates again and can start issuing; this only reads.
+     */
+    suspend fun certificate(
+        app: String,
+        hostname: String,
+    ): FlyCertificateDetail {
+        // Escaped as Go's url.PathEscape does, so a wildcard's `*` goes as `%2A`, as Fly.io asks.
+        val path = hostname.encodeURLPathPart().replace("*", "%2A")
+        return http.getJson("$machinesUrl/v1/apps/$app/certificates/$path", token.machinesHeader)
+    }
 
     /**
      * The app's secrets by name, with digests of their values, as `fly secrets list` reads them.
@@ -304,9 +319,180 @@ enum class FlyIpType { V4, V6, SharedV4, PrivateV6, EgressV4, EgressV6 }
 @Serializable
 class FlyCertificate(
     val hostname: String,
-    /** `Ready` once issued; other values while Fly.io waits on DNS or the CA. */
+    /** Fly.io's own word for it, such as `active`; [state] is what flyctl shows instead. */
     val status: String = "",
+    /** Whether Fly.io has verified that the hostname points at the app, or is the user's. */
     val configured: Boolean = false,
+    @SerialName("acme_dns_configured") val acmeDnsConfigured: Boolean = false,
+    @SerialName("acme_alpn_configured") val acmeAlpnConfigured: Boolean = false,
+    @SerialName("acme_http_configured") val acmeHttpConfigured: Boolean = false,
+    @SerialName("has_custom_certificate") val hasCustomCertificate: Boolean = false,
+    @SerialName("has_fly_certificate") val hasFlyCertificate: Boolean = false,
+) {
+    /** The status `fly certs list` prints. */
+    val state: FlyCertState
+        get() =
+            when {
+                hasCustomCertificate -> if (configured) FlyCertState.Verified else FlyCertState.NotVerified
+
+                configured && hasFlyCertificate -> FlyCertState.Issued
+
+                // Verified, or a way to verify is in place, but nothing issued yet.
+                configured || acmeDnsConfigured || acmeAlpnConfigured || acmeHttpConfigured -> FlyCertState.Issuing
+
+                else -> FlyCertState.NotVerified
+            }
+}
+
+/** flyctl's words for where a hostname's certificate stands. */
+enum class FlyCertState {
+    /** A Fly-managed certificate is issued. */
+    Issued,
+
+    /** A custom certificate is verified and in use. */
+    Verified,
+
+    /** Verified, and waiting on the certificate authority. */
+    Issuing,
+
+    /** Fly.io hasn't verified the hostname: its DNS records aren't set yet, or are wrong. */
+    NotVerified,
+}
+
+/** A hostname's certificates and what it needs to get them: fly-go's CertificateDetailResponse. */
+@Serializable
+class FlyCertificateDetail(
+    val hostname: String,
+    val configured: Boolean = false,
+    @SerialName("acme_requested") val acmeRequested: Boolean = false,
+    /** Until when the certificate authority won't issue for it again, when it has hit a rate limit. */
+    @SerialName("rate_limited_until") val rateLimitedUntil: String? = null,
+    // Go encodes a nil slice as null, so the lists are nullable here and never null below.
+    @SerialName("certificates") private val certificateList: List<FlyIssuedCertificate>? = null,
+    val validation: FlyCertValidation = FlyCertValidation(),
+    @SerialName("dns_requirements") val dnsRequirements: FlyDnsRequirements = FlyDnsRequirements(),
+    @SerialName("validation_errors") private val errorList: List<FlyCertValidationError>? = null,
+) {
+    /** A custom certificate and a Fly-managed one, either or both. */
+    val certificates: List<FlyIssuedCertificate> get() = certificateList.orEmpty()
+
+    /** Why Fly.io can't verify the hostname or issue for it, with what to do about it. */
+    val validationErrors: List<FlyCertValidationError> get() = errorList.orEmpty()
+
+    val custom: FlyIssuedCertificate? get() = certificates.firstOrNull { it.isCustom }
+
+    val flyManaged: FlyIssuedCertificate? get() = certificates.firstOrNull { !it.isCustom }
+
+    val isWildcard: Boolean get() = hostname.startsWith("*.")
+
+    /**
+     * The status `fly certs show` prints first: the custom certificate's when there is one, else
+     * the Fly-managed one's, else Issuing once the hostname is verified.
+     */
+    val state: FlyCertState
+        get() = (custom ?: flyManaged)?.state ?: if (configured) FlyCertState.Issuing else FlyCertState.NotVerified
+
+    /** Whether Fly.io issues for it, which `fly certs setup` asks before showing the ACME challenge. */
+    val usesAcme: Boolean get() = acmeRequested || flyManaged != null || custom == null
+
+    /** Whether to ask for the ownership TXT record, as `fly certs setup` decides. */
+    val needsOwnershipRecord: Boolean
+        get() = dnsRequirements.ownership.name.isNotEmpty() && (!usesAcme || custom != null || !isWildcard)
+}
+
+/** One of a hostname's certificates: fly-go's CertificateDetail. */
+@Serializable
+class FlyIssuedCertificate(
+    /** `custom` for one the user imported, `fly` for one Fly.io issues. */
+    val source: String = "",
+    /** `active`, `pending_ownership`, or another while it's being issued. */
+    val status: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    val issuer: String? = null,
+    @SerialName("issued") private val issuedList: List<FlyIssuedKey>? = null,
+) {
+    /** One per key type, RSA and ECDSA, once Fly.io has issued them. */
+    val issued: List<FlyIssuedKey> get() = issuedList.orEmpty()
+
+    val isCustom: Boolean get() = source == "custom"
+
+    /** flyctl's friendlyStatus. */
+    val state: FlyCertState
+        get() =
+            when (status) {
+                "active" -> if (isCustom) FlyCertState.Verified else FlyCertState.Issued
+                "pending_ownership" -> FlyCertState.NotVerified
+                else -> if (isCustom) FlyCertState.NotVerified else FlyCertState.Issuing
+            }
+
+    /** Who issued it, named as flyctl names them: `Let's Encrypt` for `lets_encrypt`. */
+    val authority: String?
+        get() =
+            issued
+                .firstOrNull { it.certificateAuthority.isNotEmpty() }
+                ?.certificateAuthority
+                ?.let { if (it == "lets_encrypt") "Let's Encrypt" else it }
+
+    /** When it expires, or when its first key does if it doesn't say, as flyctl falls back. */
+    val expires: String? get() = expiresAt ?: issued.firstOrNull()?.expiresAt
+}
+
+/** A key a certificate was issued for: fly-go's IssuedCertInfo. */
+@Serializable
+class FlyIssuedKey(
+    /** `rsa` or `ecdsa`. */
+    val type: String = "",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("certificate_authority") val certificateAuthority: String = "",
+)
+
+/** Which ways of proving the hostname Fly.io found in place: fly-go's CertificateValidation. */
+@Serializable
+class FlyCertValidation(
+    /** The `_acme-challenge` CNAME, for the DNS-01 challenge. */
+    @SerialName("dns_configured") val dnsConfigured: Boolean = false,
+    /** The hostname reaches the app over TLS, for TLS-ALPN-01. */
+    @SerialName("alpn_configured") val alpnConfigured: Boolean = false,
+    /** The hostname reaches the app over HTTP, for HTTP-01. */
+    @SerialName("http_configured") val httpConfigured: Boolean = false,
+    @SerialName("ownership_txt_configured") val ownershipTxtConfigured: Boolean = false,
+)
+
+/** The DNS records the hostname needs: fly-go's DNSRequirements. */
+@Serializable
+class FlyDnsRequirements(
+    @SerialName("a") private val aList: List<String>? = null,
+    @SerialName("aaaa") private val aaaaList: List<String>? = null,
+    /** What a CNAME for the hostname points at: the app's `fly.dev` name. */
+    val cname: String = "",
+    @SerialName("acme_challenge") val acmeChallenge: FlyAcmeChallenge = FlyAcmeChallenge(),
+    val ownership: FlyOwnershipRecord = FlyOwnershipRecord(),
+) {
+    val a: List<String> get() = aList.orEmpty()
+
+    val aaaa: List<String> get() = aaaaList.orEmpty()
+}
+
+/** The `_acme-challenge` CNAME that lets Fly.io issue by DNS-01, before traffic reaches the app. */
+@Serializable
+class FlyAcmeChallenge(
+    val name: String = "",
+    val target: String = "",
+)
+
+/** The `_fly-ownership` TXT record that proves the hostname is the user's. */
+@Serializable
+class FlyOwnershipRecord(
+    val name: String = "",
+    @SerialName("app_value") val appValue: String = "",
+)
+
+/** Something that stops Fly.io verifying the hostname or issuing for it, in Fly.io's words. */
+@Serializable
+class FlyCertValidationError(
+    val message: String = "",
+    val remediation: String? = null,
 )
 
 class FlyRegions(

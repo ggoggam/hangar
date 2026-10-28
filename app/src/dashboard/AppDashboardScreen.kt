@@ -67,6 +67,7 @@ fun AppDashboardScreen(
     initialTab: DashboardTab = DashboardTab.Overview,
     onMachine: (FlyMachine) -> Unit = {},
     onRelease: (FlyRelease) -> Unit = {},
+    onCertificate: (hostname: String) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(initialTab.ordinal) }
@@ -126,7 +127,7 @@ fun AppDashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         when (DashboardTab.entries[tab]) {
-                            DashboardTab.Overview -> overview(state, vm::setWindow, vm::restartApp)
+                            DashboardTab.Overview -> overview(state, vm::setWindow, vm::restartApp, onCertificate)
                             DashboardTab.Machines -> machines(state.machines, state.busy, vm::act, onMachine)
                             DashboardTab.Releases -> releases(state.releases, onRelease)
                             DashboardTab.Secrets -> secrets(state)

@@ -68,6 +68,9 @@ fun ago(instant: Instant): String {
 @Composable
 fun ago(iso: String?): String = instantOf(iso)?.let { ago(it) }.orEmpty()
 
+/** The local date of [instant], as `2026-12-30`. */
+fun calendarDate(instant: Instant): String = instant.toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+
 /** The local wall-clock time of [instant], as `14:03:27`. */
 fun clockTime(instant: Instant): String {
     val t = instant.toLocalDateTime(TimeZone.currentSystemDefault())

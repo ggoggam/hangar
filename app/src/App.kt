@@ -34,6 +34,7 @@ import androidx.navigation.toRoute
 import dev.ggoggam.hangar.app.apps.AppsScreen
 import dev.ggoggam.hangar.app.dashboard.AppDashboardScreen
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
+import dev.ggoggam.hangar.app.dashboard.CertificateScreen
 import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.dashboard.MachineScreen
 import dev.ggoggam.hangar.app.dashboard.ReleaseScreen
@@ -168,6 +169,7 @@ fun App() {
                                 initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
                                 onMachine = { nav.navigate(Route.Machine(route.name, route.org, it.id)) },
                                 onRelease = { nav.navigate(Route.Release(route.name, route.org, it.version)) },
+                                onCertificate = { nav.navigate(Route.Certificate(route.name, it)) },
                             )
                         }
                         composable<Route.Machine> { entry ->
@@ -182,6 +184,10 @@ fun App() {
                                 onBack = { nav.popBackStack() },
                                 onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
                             )
+                        }
+                        composable<Route.Certificate> { entry ->
+                            val route = entry.toRoute<Route.Certificate>()
+                            CertificateScreen(koinViewModel { parametersOf(route.app, route.hostname) }, onBack = { nav.popBackStack() })
                         }
                     }
                 }
