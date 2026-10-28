@@ -4,11 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.ggoggam.hangar.app.dashboard.Load
 import dev.ggoggam.hangar.app.dashboard.loadInto
+import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.core.FlyAddOn
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlyManagedPostgres
+import dev.ggoggam.hangar.core.FlyOrganization
+import dev.ggoggam.hangar.core.FlyPostgresBackup
 import dev.ggoggam.hangar.core.FlyPostgresCluster
+import dev.ggoggam.hangar.core.FlyPostgresClusterDetail
+import dev.ggoggam.hangar.core.FlyPostgresUser
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyToken
 import io.ktor.client.HttpClient
@@ -76,5 +81,61 @@ class StorageViewModel(
         fetch: suspend (FlyToken) -> T,
         get: (StorageState) -> Load<T>,
         set: (StorageState, Load<T>) -> StorageState,
+    ): Job = viewModelScope.loadInto(_state, session, fetch, get, set)
+}
+
+data class ClusterState(
+    val cluster: Load<FlyPostgresClusterDetail> = Load.Loading,
+    val databases: Load<List<String>> = Load.Loading,
+    val users: Load<List<FlyPostgresUser>> = Load.Loading,
+    val backups: Load<List<FlyPostgresBackup>> = Load.Loading,
+    val refreshing: Boolean = false,
+)
+
+/**
+ * One Managed Postgres cluster in [org]: `fly mpg status`, then `fly mpg databases list`,
+ * `fly mpg users list` and `fly mpg backup list`, which go where the cluster turned out to live.
+ * Read-only, and never its credentials.
+ */
+class ClusterViewModel(
+    private val id: String,
+    private val org: FlyOrganization,
+    private val http: HttpClient,
+    private val session: FlySession,
+) : ViewModel() {
+    private val _state = MutableStateFlow(ClusterState())
+    val state: StateFlow<ClusterState> = _state.asStateFlow()
+
+    init {
+        refresh(quiet = true)
+    }
+
+    /** Loads the cluster, then its lists; [quiet] keeps the pull-to-refresh spinner hidden. */
+    fun refresh(quiet: Boolean = false) {
+        if (session.token.value == null) return
+        if (!quiet) _state.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            load({ FlyManagedPostgres(http, it).cluster(id, org) }, { it.cluster }) { s, v -> s.copy(cluster = v) }.join()
+            val cluster = _state.value.cluster.value
+            if (cluster == null) {
+                // Without the cluster there's nowhere to ask for its lists.
+                _state.update { it.copy(databases = it.databases.settled(), users = it.users.settled(), backups = it.backups.settled()) }
+            } else {
+                listOf(
+                    load({ FlyManagedPostgres(http, it).databases(cluster) }, { it.databases }) { s, v -> s.copy(databases = v) },
+                    load({ FlyManagedPostgres(http, it).users(cluster) }, { it.users }) { s, v -> s.copy(users = v) },
+                    load({ FlyManagedPostgres(http, it).backups(cluster) }, { it.backups }) { s, v -> s.copy(backups = v) },
+                ).forEach { it.join() }
+            }
+            _state.update { it.copy(refreshing = false) }
+        }
+    }
+
+    private fun <T> Load<T>.settled(): Load<T> = if (this == Load.Loading) Load.Failed else this
+
+    private fun <T> load(
+        fetch: suspend (FlyToken) -> T,
+        get: (ClusterState) -> Load<T>,
+        set: (ClusterState, Load<T>) -> ClusterState,
     ): Job = viewModelScope.loadInto(_state, session, fetch, get, set)
 }

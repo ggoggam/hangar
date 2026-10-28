@@ -47,7 +47,9 @@ device's browser, and the app only receives the code Fly.io shows afterwards.
   don't contain the names.
 
 Your email address, apps, logs and metrics are held in memory while they're on screen, as are
-your secrets' names and digests; their values are never asked for. The app
+your secrets' names and digests; their values are never asked for. The same goes for your
+Managed Postgres databases' and users' names and hosts: the app never asks for their passwords or
+connection strings. The app
 doesn't write them to disk, log them or send them anywhere else. A notification names the app it's
 about, and your device keeps it until you dismiss it.
 

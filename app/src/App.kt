@@ -48,6 +48,7 @@ import dev.ggoggam.hangar.app.settings.SystemBars
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentBanner
 import dev.ggoggam.hangar.app.status.IncidentFeed
+import dev.ggoggam.hangar.app.storage.ClusterScreen
 import dev.ggoggam.hangar.app.storage.StorageScreen
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
 import dev.ggoggam.hangar.app.watch.NotificationLink
@@ -125,7 +126,23 @@ fun App() {
                         composable<Route.Apps> {
                             AppsScreen(koinViewModel(), onOpen = openApp, bottomBar = { bar(HomeTab.Apps) })
                         }
-                        composable<Route.Storage> { StorageScreen(koinViewModel(), onOpenApp = openApp, bottomBar = { bar(HomeTab.Data) }) }
+                        composable<Route.Storage> {
+                            StorageScreen(
+                                koinViewModel(),
+                                onOpenApp = openApp,
+                                onOpenCluster = { nav.navigate(Route.PostgresCluster(it.id, it.name, it.org, it.rawOrg)) },
+                                bottomBar = { bar(HomeTab.Data) },
+                            )
+                        }
+                        composable<Route.PostgresCluster> { entry ->
+                            val route = entry.toRoute<Route.PostgresCluster>()
+                            ClusterScreen(
+                                koinViewModel { parametersOf(route.id, route.org, route.rawOrg) },
+                                title = route.name,
+                                onBack = { nav.popBackStack() },
+                                onOpenApp = { name -> nav.navigate(Route.App(name, route.org)) },
+                            )
+                        }
                         composable<Route.Settings> {
                             SettingsScreen(
                                 koinViewModel(),
