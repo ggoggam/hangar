@@ -22,6 +22,9 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import dev.ggoggam.hangar.app.generated.resources.Res
+import dev.ggoggam.hangar.app.generated.resources.settings_checks_detail
+import org.jetbrains.compose.resources.StringResource
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.concurrent.TimeUnit
@@ -119,3 +122,5 @@ actual fun rememberNotificationPermission(): (onResult: (Boolean) -> Unit) -> Un
         }
     }.value
 }
+
+internal actual val checksDetail: StringResource = Res.string.settings_checks_detail

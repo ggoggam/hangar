@@ -183,6 +183,7 @@
     <string name="settings_notifications">Notifications</string>
     <string name="settings_checks">Background checks</string>
     <string name="settings_checks_detail">Checks Fly.io about every 15 minutes and notifies you of new problems</string>
+    <string name="settings_checks_detail_ios">When iOS allows: less often if you rarely open Hangar, never after you force-quit it</string>
     <string name="settings_checks_denied">Notifications are off for Hangar. Turn them on in system settings first.</string>
     <string name="settings_notify_incidents">Fly.io incidents</string>
     <string name="settings_notify_incidents_detail">When an incident opens or resolves</string>

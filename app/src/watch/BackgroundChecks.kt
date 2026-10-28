@@ -6,8 +6,9 @@ import dev.ggoggam.hangar.core.isDemo
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.StringResource
 
-/** Runs [Watcher] now and then while the app isn't open: WorkManager on Android. */
+/** Runs [Watcher] now and then while the app isn't open: WorkManager on Android, BGTaskScheduler on iOS. */
 interface BackgroundChecks {
     /** Whether this platform can check in the background at all. */
     val supported: Boolean
@@ -63,3 +64,6 @@ suspend fun keepScheduled(
  */
 @Composable
 expect fun rememberNotificationPermission(): (onResult: (Boolean) -> Unit) -> Unit
+
+/** What the switch in Settings says about how often the checks run, which differs by platform. */
+internal expect val checksDetail: StringResource
