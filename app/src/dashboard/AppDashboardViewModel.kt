@@ -17,6 +17,7 @@ import dev.ggoggam.hangar.core.FlyMachineActions
 import dev.ggoggam.hangar.core.FlyMachines
 import dev.ggoggam.hangar.core.FlyMetrics
 import dev.ggoggam.hangar.core.FlyRelease
+import dev.ggoggam.hangar.core.FlySecret
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyToken
 import dev.ggoggam.hangar.core.FlyVolume
@@ -90,6 +91,7 @@ data class DashboardState(
     val volumes: Load<List<FlyVolume>> = Load.Loading,
     val ips: Load<List<FlyIp>> = Load.Loading,
     val certificates: Load<List<FlyCertificate>> = Load.Loading,
+    val secrets: Load<List<FlySecret>> = Load.Loading,
     val metrics: Load<FlyAppMetrics> = Load.Loading,
     val window: MetricsWindow = MetricsWindow.Hour,
     val refreshing: Boolean = false,
@@ -149,8 +151,8 @@ data class LogsState(
 )
 
 /**
- * One app's dashboard: `fly status`, `fly incidents hosts list`, `fly machines list`, `fly releases`
- * and `fly logs` in one place.
+ * One app's dashboard: `fly status`, `fly incidents hosts list`, `fly machines list`, `fly releases`,
+ * `fly secrets list` and `fly logs` in one place.
  */
 class AppDashboardViewModel(
     val appName: String,
@@ -197,6 +199,7 @@ class AppDashboardViewModel(
             load({ FlyMachines(http, it).volumes(appName) }, { it.volumes }) { s, v -> s.copy(volumes = v) },
             load({ FlyMachines(http, it).ips(appName) }, { it.ips }) { s, v -> s.copy(ips = v) },
             load({ FlyMachines(http, it).certificates(appName) }, { it.certificates }) { s, v -> s.copy(certificates = v) },
+            load({ FlyMachines(http, it).secrets(appName) }, { it.secrets }) { s, v -> s.copy(secrets = v) },
             loadMetrics(),
         )
 

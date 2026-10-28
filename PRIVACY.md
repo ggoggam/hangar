@@ -15,7 +15,7 @@ check this in the code at <https://github.com/ggoggam/hangar>.
 
 - **Your Fly.io token, to Fly.io.** When you sign in, Fly.io gives the app an access token, or you
   paste one. The app sends it to Fly.io with each request, to show your apps, machines, logs,
-  metrics, releases, databases, organizations and Fly.io's status. It goes only to Fly.io's own
+  metrics, releases, secrets' names, databases, organizations and Fly.io's status. It goes only to Fly.io's own
   hosts: `api.fly.io`, `api.machines.dev` and `auth.fly.io`.
 - **A name for the login, to Fly.io.** When you sign in, the app names the login after your
   device's model, such as "Hangar on iPhone", so you can recognize it on Fly.io's approval page and
@@ -44,7 +44,8 @@ device's browser, and the app only receives the code Fly.io shows afterwards.
   Fly.io publishes, and one-way fingerprints of the problems it has already told you about, which
   don't contain your app, machine or organization names.
 
-Your email address, apps, logs and metrics are held in memory while they're on screen. The app
+Your email address, apps, logs and metrics are held in memory while they're on screen, as are
+your secrets' names and digests; their values are never asked for. The app
 doesn't write them to disk, log them or send them anywhere else. A notification names the app it's
 about, and your device keeps it until you dismiss it.
 

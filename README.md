@@ -108,7 +108,8 @@ the ones flyctl and fly-go make:
 | Metrics | Fly.io's managed Prometheus: `api.fly.io/prometheus/{org}/api/v1/query_range` over 1, 6 or 24 hours, for CPU, memory, edge requests and errors per minute, and p95 latency. flyctl has no metrics command; these follow Fly.io's Grafana boards. "Open in Grafana" opens the app's board on fly-metrics.net in the browser, the page `fly dashboard metrics --grafana` opens. |
 | Machines | `api.machines.dev/v1/apps/{app}/machines`, filtered the way `fly status` filters it: no destroyed, release-command or console machines, and no `bg_deployments_compat` checks. Each machine's config `env` is never decoded. Start, stop, suspend and restart go through `/v1/apps/{app}/machines/{id}/start`, `/stop`, `/suspend` and `/restart`, each under the machine's lease as flyctl takes one (`POST …/lease`, the action with the `fly-machine-lease-nonce` header, `DELETE …/lease`). A restart waits on `…/wait?state=started` and then for the machine's checks to pass, as `fly machine restart` does. Stopping, suspending and restarting ask first. |
 | Releases | GraphQL `releasesUnprocessed` (fly-go's `GetAppReleasesMachines`), the last 25. |
-| Logs | `api.fly.io/api/v1/apps/{app}/logs?next_token=&instance=`, polled the way `fly logs` polls when it can't use NATS: straight away while pages come back full, backing off to 4 seconds when quiet. JSON log lines are shown as their message plus `key=value` fields. |
+| Secrets | `api.machines.dev/v1/apps/{app}/secrets`, which `fly secrets list` reads: names, digests and when each was set. Values are never asked for (no `show_secrets`), so they never reach the phone. Each secret's status is worked out as flyctl does it: on a machine when it was set no later than the release that machine runs was made, so Deployed on every machine, Staged on none, or Partial; none past 100 machines, where flyctl shows none either. |
+| Logs | `api.fly.io/api/v1/apps/{app}/logs?next_token=&instance=`, polled the way `fly logs` polls when it can't use NATS: straight away while pages come back full, backing off to 4 seconds when quiet. JSON log lines are shown as their message plus `key=value` fields. The search and the errors-and-warnings filter look through the last 1,000 lines on the phone, as the dashboard's live logs do, since the API has no search; a line's level comes from its JSON or logfmt (`level=`) when it has one. |
 
 The bottom bar switches between the app list and three more screens:
 
@@ -204,7 +205,7 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
-  notified, never an app's, machine's or organization's name. Your email, apps, logs and metrics are held in
+  notified, never an app's, machine's or organization's name. Your email, apps, logs, metrics and secrets' names are held in
   memory while they're on screen: the app never writes them to disk, logs them or sends them
   anywhere. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients

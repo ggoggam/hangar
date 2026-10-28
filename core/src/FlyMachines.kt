@@ -9,8 +9,12 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.time.Instant
 
-/** The Machines API at api.machines.dev, for reading: an app's machines, volumes, IPs and certificates. Actions are [FlyMachineActions]. */
+/**
+ * The Machines API at api.machines.dev, for reading: an app's machines, volumes, IPs, certificates
+ * and secrets. Actions are [FlyMachineActions].
+ */
 class FlyMachines(
     private val http: HttpClient,
     private val token: FlyToken,
@@ -33,6 +37,13 @@ class FlyMachines(
 
     suspend fun certificates(app: String): List<FlyCertificate> =
         http.getJson<Certificates>("$machinesUrl/v1/apps/$app/certificates", token.machinesHeader).certificates
+
+    /**
+     * The app's secrets by name, with digests of their values, as `fly secrets list` reads them.
+     * The values themselves are never asked for, so they never reach the phone.
+     */
+    suspend fun secrets(app: String): List<FlySecret> =
+        http.getJson<AppSecrets>("$machinesUrl/v1/apps/$app/secrets", token.machinesHeader).secrets.sortedBy { it.name }
 
     /** Fly.io's regions, without deprecated ones, and the one nearest the caller, as `fly platform regions` lists them. */
     suspend fun regions(): FlyRegions {
@@ -236,3 +247,57 @@ private class IpAssignments(
 private class Certificates(
     val certificates: List<FlyCertificate> = emptyList(),
 )
+
+/** A secret's name and the digest of its value; the value isn't decoded, and isn't asked for. */
+@Serializable
+class FlySecret(
+    val name: String,
+    val digest: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+private class AppSecrets(
+    val secrets: List<FlySecret> = emptyList(),
+)
+
+/** Whether a secret has reached the app's machines, as `fly secrets list` says. */
+enum class FlySecretStatus {
+    /** On every machine. */
+    Deployed,
+
+    /** Set, but on no machine yet: `fly secrets deploy` puts it there. */
+    Staged,
+
+    /** On some machines, as during a rolling deploy or after one that failed partway. */
+    Partial,
+
+    /** It has no time it was set. */
+    Unknown,
+}
+
+/**
+ * [secret]'s status, worked out as flyctl's `secrets list` does: it's on a machine when it was set
+ * no later than the release that machine runs was made. Null for more machines than flyctl checks,
+ * where it shows no status either.
+ */
+fun secretStatus(
+    secret: FlySecret,
+    machines: List<FlyMachine>,
+    releases: List<FlyRelease>,
+): FlySecretStatus? {
+    if (machines.size > MAX_MACHINES_FOR_SECRET_STATUS) return null
+    if (machines.isEmpty()) return FlySecretStatus.Staged
+    val setAt = secret.updatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return FlySecretStatus.Unknown
+    val releasedAt =
+        releases.associate { it.version to runCatching { Instant.parse(it.createdAt) }.getOrNull() }
+    val with = machines.count { m -> releasedAt[m.releaseVersion]?.let { setAt <= it } == true }
+    return when (with) {
+        0 -> FlySecretStatus.Staged
+        machines.size -> FlySecretStatus.Deployed
+        else -> FlySecretStatus.Partial
+    }
+}
+
+private const val MAX_MACHINES_FOR_SECRET_STATUS = 100

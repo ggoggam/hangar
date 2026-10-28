@@ -29,6 +29,7 @@
     <string name="tab_overview">Overview</string>
     <string name="tab_machines">Machines</string>
     <string name="tab_releases">Releases</string>
+    <string name="tab_secrets">Secrets</string>
     <string name="tab_logs">Logs</string>
     <string name="load_failed">Couldn't load this.</string>
     <string name="overview_hostname">Hostname</string>
@@ -100,6 +101,13 @@
     <string name="action_failed_detail">That didn't go through: %1$s</string>
     <string name="releases_empty">No releases yet.</string>
     <string name="release_stable">stable</string>
+    <string name="secrets_note">Names and digests only. Values stay on Fly.io, where only your app can read them.</string>
+    <string name="secrets_empty">No secrets. Set them with fly secrets set.</string>
+    <string name="secrets_undeployed">Some secrets aren't on every machine yet. Deploy them with fly secrets deploy.</string>
+    <string name="secret_deployed">Deployed</string>
+    <string name="secret_staged">Staged</string>
+    <string name="secret_partial">Partial</string>
+    <string name="secret_unknown">Unknown</string>
     <string name="logs_all">All machines</string>
     <string name="logs_waiting">Waiting for logs…</string>
     <string name="logs_copy">Copy</string>
@@ -107,6 +115,11 @@
     <string name="logs_to_top">Scroll to the oldest line</string>
     <string name="logs_to_bottom">Scroll to the newest line</string>
     <string name="logs_failed">Couldn't reach Fly.io's logs. Retrying…</string>
+    <string name="logs_search">Search logs</string>
+    <string name="logs_search_clear">Clear search</string>
+    <string name="logs_problems">Errors &amp; warnings</string>
+    <string name="logs_matches">%1$d of the last %2$d lines</string>
+    <string name="logs_no_matches">No matching lines in the last %1$d. New ones are searched as they come in.</string>
     <string name="time_just_now">just now</string>
     <string name="time_minutes_ago">%1$d min ago</string>
     <string name="time_hours_ago">%1$d h ago</string>
