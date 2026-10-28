@@ -49,16 +49,41 @@ class FlyUsageTest {
                                 url.encodedPath.endsWith("/api/v1/query") -> {
                                     val q = url.parameters["query"].orEmpty()
                                     queries += q
+                                    val seconds = Regex("""\[(\d+)s""").find(q)!!.groupValues[1].toLong()
+                                    val latest = url.parameters["time"] == "$now"
                                     if ("fly_instance_info" in q) {
-                                        // 30 days' minutes of a shared-cpu-1x 512MB in iad, and 60 minutes of a performance-1x 2GB in nrt.
-                                        """{"status":"success","data":{"resultType":"vector","result":[
-                                            {"metric":{"app":"web","region":"iad","cpu_kind":"shared","cpu_count":"1","memory_mb":"512"},"value":[$now,"43200"]},
-                                            {"metric":{"app":"job","region":"nrt","cpu_kind":"performance","cpu_count":"1","memory_mb":"2048"},"value":[$now,"60"]}]}}"""
+                                        // A shared-cpu-1x 512MB in iad all along, and a second one for the last ten
+                                        // minutes. Lately, a CI Machine in nrt that ran for four minutes' worth of
+                                        // samples, as a performance-1x 2GB and then resized to a shared-cpu-2x 512MB.
+                                        // And a builder, which Fly.io doesn't charge for.
+                                        val result =
+                                            listOfNotNull(
+                                                """{"metric":{"app":"web","region":"iad","instance":"w1","cpu_kind":"shared","cpu_count":"1","memory_mb":"512"},"value":[$now,"${seconds / 60}"]}""",
+                                                """{"metric":{"app":"web","region":"iad","instance":"w2","cpu_kind":"shared","cpu_count":"1","memory_mb":"512"},"value":[$now,"10"]}"""
+                                                    .takeIf { latest },
+                                                """{"metric":{"app":"job","region":"nrt","instance":"j1","cpu_kind":"performance","cpu_count":"1","memory_mb":"2048"},"value":[$now,"2"]}"""
+                                                    .takeIf { latest },
+                                                """{"metric":{"app":"job","region":"nrt","instance":"j1","cpu_kind":"shared","cpu_count":"2","memory_mb":"512"},"value":[$now,"2"]}"""
+                                                    .takeIf { latest },
+                                                """{"metric":{"app":"fly-builder-quiet-sun-1234","region":"nrt","instance":"b1","cpu_kind":"shared","cpu_count":"8","memory_mb":"16384"},"value":[$now,"100"]}""",
+                                            )
+                                        """{"status":"success","data":{"resultType":"vector","result":[${result.joinToString()}]}}"""
+                                    } else if ("fly_instance_cpu" in q) {
+                                        // w1 ran the whole time, w2 reported no CPU time, and j1 really ran for 90
+                                        // vCPU-seconds: 30 seconds at each size.
+                                        val result =
+                                            listOfNotNull(
+                                                """{"metric":{"app":"web","instance":"w1"},"value":[$now,"$seconds"]}""",
+                                                """{"metric":{"app":"job","instance":"j1"},"value":[$now,"90"]}""".takeIf { latest },
+                                                """{"metric":{"app":"fly-builder-quiet-sun-1234","instance":"b1"},"value":[$now,"48000"]}""",
+                                            )
+                                        """{"status":"success","data":{"resultType":"vector","result":[${result.joinToString()}]}}"""
                                     } else {
                                         """{"status":"success","data":{"resultType":"vector","result":[
                                             {"metric":{"app":"web","region":"iad"},"value":[$now,"2000000000"]},
                                             {"metric":{"app":"web","region":"sin"},"value":[$now,"1000000000"]},
-                                            {"metric":{"app":"web","region":"ams"},"value":[$now,"NaN"]}]}}"""
+                                            {"metric":{"app":"web","region":"ams"},"value":[$now,"NaN"]},
+                                            {"metric":{"app":"fly-builder-quiet-sun-1234","region":"nrt"},"value":[$now,"5000000000"]}]}}"""
                                     }
                                 }
 
@@ -79,14 +104,23 @@ class FlyUsageTest {
 
             assertEquals(listOf("web", "job"), usage.apps.map { it.app })
             val web = usage.app("web")!!
-            assertNear(3.69, web.computeUsd)
+            // Fourteen days of w1, and w2's ten minutes as they stand.
+            assertNear((14 * 86_400 + 600) * FlyPrices.machinePerSecond("shared", 1, 512, "iad"), web.computeUsd, within = 1e-9)
             assertEquals(3e9, web.dataOutBytes)
             assertNear(2 * 0.02 + 0.04, web.egressUsd, within = 1e-9)
             assertEquals(10, web.volumeGb)
             val week = (now - 1_799_395_200L).toDouble()
             assertNear(10 * 0.15 * week / FlyPrices.SECONDS_PER_30_DAYS, web.volumeUsd, within = 1e-9)
-            assertNear(3_600 * 1.2732e-5 * 1.307692308, usage.app("job")!!.computeUsd, within = 1e-6)
-            assertEquals(43_260 * 60.0, usage.machineSeconds)
-            assertTrue("[1209600s:1m]" in queries.first { "fly_instance_info" in it })
+            assertNear(
+                30 * (FlyPrices.machinePerSecond("performance", 1, 2048, "nrt") + FlyPrices.machinePerSecond("shared", 2, 512, "nrt")),
+                usage.app("job")!!.computeUsd,
+                within = 1e-9,
+            )
+            assertNear(14 * 86_400 + 600 + 60.0, usage.machineSeconds, within = 1e-6)
+            // Asked about two days at a time, which Fly.io answers from every sample.
+            assertEquals(
+                List(7) { "[172800s:1m]" },
+                queries.filter { "fly_instance_info" in it }.map { Regex("""\[\d+s:1m]""").find(it)!!.value },
+            )
         }
 }

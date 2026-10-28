@@ -45,6 +45,9 @@ object FlyPrices {
             "yyz" to (1.115384615 to 0.02),
         )
 
+    /** Whether Fly.io charges for [app]: it doesn't for the remote builders flyctl makes, `fly-builder-…`. */
+    fun billed(app: String): Boolean = !app.startsWith("fly-builder-")
+
     /** Whether [region] is in the table; one that isn't is priced as `iad`, the cheapest. */
     fun knows(region: String): Boolean = region in REGIONS
 
