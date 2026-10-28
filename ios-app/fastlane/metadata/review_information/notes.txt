@@ -2,6 +2,6 @@ No account is needed to review Hangar. On the sign-in screen, tap "Try the demo"
 
 Signing in for real needs a Fly.io account (fly.io), a hosting platform for developers. Hangar shows the account's apps, machines, logs and metrics, and can start, stop, suspend and restart machines. It can't deploy, scale or delete anything. In the demo, those actions change only the sample data.
 
-Background checks (Settings > Notifications) use background app refresh (the "fetch" mode) to ask Fly.io's API for new incidents, problems with the account's apps, finished or failed deploys and billing problems, and post local notifications. There's no push server. The demo is never checked in the background.
+Background checks (Settings > Notifications) use background app refresh (the "fetch" mode) to ask Fly.io's API for new incidents, problems with the account's apps, finished or failed deploys, volumes nearly full and billing problems, and post local notifications. There's no push server. The demo is never checked in the background.
 
 Hangar is an unofficial, open-source client (https://github.com/ggoggam/hangar). It isn't made by or affiliated with Fly.io.

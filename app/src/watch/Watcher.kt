@@ -2,6 +2,8 @@ package dev.ggoggam.hangar.app.watch
 
 import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.bytes
+import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.core.FlyAlert
 import dev.ggoggam.hangar.core.FlyApiException
@@ -40,7 +42,11 @@ class Watcher(
                 FlyWatch(http, session).check(
                     settings.state(),
                     nowSeconds(),
-                    FlyWatchOptions(billing = billing, monthlyBudgetUsd = settings.budget.value?.takeIf { billing }),
+                    FlyWatchOptions(
+                        billing = billing,
+                        monthlyBudgetUsd = settings.budget.value?.takeIf { billing },
+                        volumes = settings.volumes.value,
+                    ),
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -60,6 +66,7 @@ class Watcher(
                     is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> settings.incidents.value
                     is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> settings.billing.value
                     is FlyAlert.Deploy -> settings.deploys.value
+                    is FlyAlert.VolumeNearlyFull -> settings.volumes.value
                     else -> settings.apps.value
                 }
             if (wanted) notifier.post(notification(alert))
@@ -82,6 +89,7 @@ class Watcher(
                 is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> Incidents
                 is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> Billing
                 is FlyAlert.Deploy -> Deploys
+                is FlyAlert.VolumeNearlyFull -> Volumes
                 else -> Apps
             }
         val (title, body) =
@@ -138,6 +146,18 @@ class Watcher(
                     }
                 }
 
+                is FlyAlert.VolumeNearlyFull -> {
+                    val volume = alert.volume
+                    getString(Res.string.notify_volume_title, alert.app) to
+                        getString(
+                            Res.string.notify_volume_body,
+                            listOf(volume.name.ifEmpty { volume.id }, volume.region).filter { it.isNotEmpty() }.joinToString(" · "),
+                            percent(volume.usedFraction ?: 0.0),
+                            bytes((volume.bytesUsed ?: 0).toDouble()),
+                            bytes((volume.bytesTotal ?: 0).toDouble()),
+                        )
+                }
+
                 is FlyAlert.Deploy -> {
                     val release = alert.release
                     val by = release.user?.email?.takeIf { it.isNotEmpty() }
@@ -162,7 +182,7 @@ class Watcher(
         if (alert !is FlyAlert.OfApp) return NotificationLink.Apps
         val tab =
             when (alert) {
-                is FlyAlert.HostIssue -> DashboardTab.Overview
+                is FlyAlert.HostIssue, is FlyAlert.VolumeNearlyFull -> DashboardTab.Overview
                 is FlyAlert.Deploy -> DashboardTab.Releases
                 else -> DashboardTab.Machines
             }
@@ -178,5 +198,6 @@ class Watcher(
         val Apps = NotificationChannel.Apps to Res.string.channel_apps
         val Billing = NotificationChannel.Billing to Res.string.channel_billing
         val Deploys = NotificationChannel.Deploys to Res.string.channel_deploys
+        val Volumes = NotificationChannel.Volumes to Res.string.channel_volumes
     }
 }

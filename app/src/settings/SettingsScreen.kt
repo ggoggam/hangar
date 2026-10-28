@@ -31,6 +31,7 @@ import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Building2
 import com.composables.icons.lucide.CircleDollarSign
 import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Moon
@@ -41,12 +42,14 @@ import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
 import dev.ggoggam.hangar.app.watch.WatchSettings
 import dev.ggoggam.hangar.app.watch.checksDetail
 import dev.ggoggam.hangar.app.watch.rememberNotificationPermission
 import dev.ggoggam.hangar.core.FlyOrganization
+import dev.ggoggam.hangar.core.FlyVolume
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -144,6 +147,7 @@ private fun Notifications(watch: WatchSettings) {
     val incidents by watch.incidents.collectAsStateWithLifecycle()
     val apps by watch.apps.collectAsStateWithLifecycle()
     val deploys by watch.deploys.collectAsStateWithLifecycle()
+    val volumes by watch.volumes.collectAsStateWithLifecycle()
     val billing by watch.billing.collectAsStateWithLifecycle()
     val budget by watch.budget.collectAsStateWithLifecycle()
     var editBudget by remember { mutableStateOf(false) }
@@ -197,6 +201,15 @@ private fun Notifications(watch: WatchSettings) {
             onClick = { watch.setDeploys(!deploys) },
         ) {
             Switch(checked = deploys, onCheckedChange = null)
+        }
+        RowDivider()
+        SettingRow(
+            stringResource(Res.string.settings_notify_volumes),
+            icon = Lucide.HardDrive,
+            detail = stringResource(Res.string.settings_notify_volumes_detail, percent(FlyVolume.NEARLY_FULL)),
+            onClick = { watch.setVolumes(!volumes) },
+        ) {
+            Switch(checked = volumes, onCheckedChange = null)
         }
         RowDivider()
         SettingRow(

@@ -55,6 +55,8 @@
     <string name="volumes_title">Volumes</string>
     <string name="volume_detail">%1$s · %2$d GB · %3$s</string>
     <string name="volume_unattached">not attached</string>
+    <string name="volume_nearly_full">Volume nearly full</string>
+    <string name="volume_nearly_full_body">%1$s in %2$s is %3$s full: %4$s of %5$s. Writes fail once it's full, so extend it with fly volumes extend or free up space.</string>
     <string name="ips_title">IP addresses</string>
     <string name="ip_v4">IPv4</string>
     <string name="ip_v6">IPv6</string>
@@ -204,6 +206,8 @@
     <string name="settings_notify_apps_detail">Failed or crashed machines, failing checks, host issues</string>
     <string name="settings_notify_deploys">Deploys</string>
     <string name="settings_notify_deploys_detail">When a deploy finishes, fails or is interrupted</string>
+    <string name="settings_notify_volumes">Volumes</string>
+    <string name="settings_notify_volumes_detail">When a volume reaches %1$s full</string>
     <string name="settings_notify_billing">Billing</string>
     <string name="settings_notify_billing_detail">Payments due or failed, and spend over your alert</string>
     <string name="settings_spend_alert">Spend alert</string>
@@ -229,6 +233,7 @@
     <string name="channel_incidents">Fly.io incidents</string>
     <string name="channel_apps">Problems with your apps</string>
     <string name="channel_deploys">Deploys</string>
+    <string name="channel_volumes">Volumes nearly full</string>
     <string name="channel_account">Account</string>
     <string name="notify_incident_title">Fly.io incident: %1$s</string>
     <string name="notify_incident_body">Fly.io is investigating.</string>
@@ -249,6 +254,8 @@
     <string name="notify_deploy_by">Deployed by %1$s</string>
     <string name="notify_deploy_failed_body">Started by %1$s. Some machines may still be on the previous release.</string>
     <string name="notify_deploy_failed_body_anonymous">Some machines may still be on the previous release.</string>
+    <string name="notify_volume_title">%1$s: volume nearly full</string>
+    <string name="notify_volume_body">%1$s is %2$s full, %3$s of %4$s. Extend it with fly volumes extend or free up space.</string>
     <string name="notify_signed_out_title">Hangar was signed out</string>
     <string name="notify_signed_out_body">Fly.io no longer accepts this login, so background checks have stopped. Open Hangar to sign in again.</string>
 </resources>

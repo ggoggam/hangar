@@ -61,6 +61,9 @@ class FlyDemoTest {
                     ?.size,
             )
             assertEquals(2, machines.volumes("api-db").size)
+            assertTrue(machines.volumes("api-db").none { it.nearlyFull })
+            // One volume nearly full, for Overview's warning.
+            assertTrue(machines.volumes("blog").single().nearlyFull)
             assertEquals(2, machines.ips("web").size)
             assertEquals("Ready", machines.certificates("web").first().status)
 
