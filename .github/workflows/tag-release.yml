@@ -1,8 +1,8 @@
 name: Tag release
 
 # versionName in android-app/module.yaml is the one place a release is decided. When CI passes on
-# main and there's no v<versionName> tag yet, this tags that commit and starts Release Android and
-# Release iOS from the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
+# main and there's no v<versionName> tag yet, this tags that commit, starts Release Android and
+# Release iOS from the tag, and publishes a GitHub release for it. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
 # workflow_dispatch, which is the one event that token can start.
 on:
   workflow_run:
@@ -27,7 +27,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # push the tag
+      contents: write # push the tag and create the GitHub release
       actions: write # start the releases
     env:
       SHA: ${{ github.event.workflow_run.head_sha }}
@@ -72,3 +72,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: gh workflow run release-ios.yml --ref "$TAG"
+
+      # Last, so a GitHub release that fails holds up neither store. The notes list the pull requests
+      # merged since the previous tag; edit them on GitHub afterwards if they need more.
+      - name: Create GitHub release
+        if: ${{ !cancelled() && steps.tag.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh release create "$TAG" --verify-tag --generate-notes --title "Hangar ${TAG#v}"

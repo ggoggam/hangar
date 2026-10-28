@@ -20,7 +20,9 @@ default, 1.
 Once it's merged and CI passes on `main`, **Tag release** tags the merge commit `v` plus
 `versionName` and starts **Release Android** and **Release iOS** from that tag. Release Android builds the signed
 bundle, keeps it as the run's artifact and uploads it to the track in the `PLAY_TRACK` repository
-variable (closed testing if it's unset). A merge that leaves `versionName` alone releases nothing.
+variable (closed testing if it's unset). Tag release also publishes a GitHub release for the tag,
+with notes listing the pull requests merged since the previous one, to edit on GitHub if they need
+more. A merge that leaves `versionName` alone releases nothing.
 
 Pushing a `v*` tag yourself still starts a release, and Release Android checks that it matches
 `versionName`. If a release fails after its tag is pushed, fix it and run **Release Android** again
