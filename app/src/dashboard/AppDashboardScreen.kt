@@ -53,6 +53,7 @@ enum class DashboardTab(
     Overview(Res.string.tab_overview),
     Machines(Res.string.tab_machines),
     Releases(Res.string.tab_releases),
+    Secrets(Res.string.tab_secrets),
     Logs(Res.string.tab_logs),
 }
 
@@ -124,6 +125,7 @@ fun AppDashboardScreen(
                             DashboardTab.Overview -> overview(state, vm::setWindow, vm::restartApp)
                             DashboardTab.Machines -> machines(state.machines, state.busy, vm::act)
                             DashboardTab.Releases -> releases(state.releases)
+                            DashboardTab.Secrets -> secrets(state)
                             DashboardTab.Logs -> Unit
                         }
                     }

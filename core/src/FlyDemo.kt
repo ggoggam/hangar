@@ -118,6 +118,10 @@ private class FlyDemo(
                             obj("ips" to ips(app))
                         }
 
+                        "secrets" -> {
+                            obj("secrets" to secrets(app))
+                        }
+
                         else -> {
                             obj(
                                 "certificates" to
@@ -390,6 +394,19 @@ private class FlyDemo(
         )
     }
 
+    /**
+     * The usual secrets, set well before the release the machines run, and on `web` one set since,
+     * which `fly secrets deploy` hasn't put on the machines yet.
+     */
+    private fun secrets(app: DemoApp): List<Map<String, Any?>> {
+        val names = if (app.postgres) listOf("OPERATOR_PASSWORD", "REPL_PASSWORD", "SU_PASSWORD") else DEMO_SECRETS
+        val set = names.map { it to now - 19 * DAY - (noise(app.seed, it.hashCode().toLong()) * 9 * DAY).toLong() }
+        val staged = if (app.name == "web") listOf("STRIPE_WEBHOOK_SECRET" to now - 25 * 60) else emptyList()
+        return (set + staged).map { (name, at) ->
+            mapOf("name" to name, "digest" to fingerprint(app.name, name), "created_at" to iso(at), "updated_at" to iso(at))
+        }
+    }
+
     private fun volume(v: DemoVolume): Map<String, Any?> {
         val total = v.sizeGb * 1_000_000_000L
         return mapOf(
@@ -627,7 +644,7 @@ private class FlyDemo(
         val LOGS = Regex("/api/v1/apps/([^/]+)/logs")
         val PROMETHEUS = Regex("/prometheus/([^/]+)/api/v1/(query|query_range)")
         val OLDER_POSTGRES = Regex("/api/v1/organizations/([^/]+)/postgres")
-        val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates)")
+        val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates|secrets)")
         val MACHINE = Regex("/v1/apps/([^/]+)/machines/([^/]+)(|/lease|/wait|/start|/stop|/suspend|/restart)")
         val APP = Regex("/v1/apps/([^/]+)")
         val OPERATION = Regex("""query\s+(\w+)""")
@@ -649,6 +666,8 @@ private fun noise(
 }
 
 private fun iso(seconds: Long) = Instant.fromEpochSeconds(seconds).toString()
+
+private val DEMO_SECRETS = listOf("DATABASE_URL", "REDIS_URL", "SECRET_KEY_BASE", "SENTRY_DSN")
 
 private fun obj(vararg pairs: Pair<String, Any?>): JsonElement = j(mapOf(*pairs))
 
