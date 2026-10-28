@@ -43,8 +43,9 @@ Hangar's promise is that it talks to Fly.io and nothing else, and collects nothi
 - No analytics, crash reporting, ads, remote config or any other SDK that phones home.
 - No network destination other than Fly.io's own API hosts. A new one needs a reason in the
   pull request and a line in the README's Privacy section.
-- Never log, print or persist tokens, emails, app data or log lines. The token is the only thing
-  stored, in `TokenStore`.
+- Never log, print or persist tokens, emails, app data or log lines. The token is the only secret
+  stored, in `TokenStore`. The background checks keep one-way fingerprints of what they've
+  notified (`FlyWatchState`), never names.
 - Don't send device names or identifiers. The login's name carries the device model and nothing more.
 - If a change affects what the app sends, stores or connects to, update the Privacy section in
   the same pull request.

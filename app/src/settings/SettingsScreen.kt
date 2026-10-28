@@ -22,21 +22,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Building2
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.Server
+import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.watch.BackgroundChecks
+import dev.ggoggam.hangar.app.watch.WatchSettings
+import dev.ggoggam.hangar.app.watch.rememberNotificationPermission
 import dev.ggoggam.hangar.core.FlyOrganization
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /**
  * The account, organizations and platform as flyctl's `auth`, `orgs` and `platform` commands show
- * them, the theme, and signing out.
+ * them, background checks, the theme, and signing out.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +55,8 @@ fun SettingsScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val theme = koinInject<ThemeSettings>()
     val dark = theme.dark.collectAsStateWithLifecycle().value ?: isSystemInDarkTheme()
+    val checks = koinInject<BackgroundChecks>()
+    val watch = koinInject<WatchSettings>()
     var confirmSignOut by remember { mutableStateOf(false) }
     if (confirmSignOut) {
         SignOutDialog(onConfirm = vm::signOut, onDismiss = { confirmSignOut = false })
@@ -100,6 +108,10 @@ fun SettingsScreen(
                 RowDivider()
             }
 
+            if (checks.supported) {
+                item(key = "notifications") { Notifications(watch) }
+            }
+
             item(key = "appearance") {
                 Header(stringResource(Res.string.settings_appearance))
                 // The whole row toggles; the switch only shows the state.
@@ -109,6 +121,58 @@ fun SettingsScreen(
                 RowDivider()
             }
         }
+    }
+}
+
+/**
+ * The background checks' switch, which asks to post notifications as it turns them on, and what
+ * they notify about while they're on.
+ */
+@Composable
+private fun Notifications(watch: WatchSettings) {
+    val on by watch.enabled.collectAsStateWithLifecycle()
+    val incidents by watch.incidents.collectAsStateWithLifecycle()
+    val apps by watch.apps.collectAsStateWithLifecycle()
+    val ask = rememberNotificationPermission()
+    var denied by remember { mutableStateOf(false) }
+    Header(stringResource(Res.string.settings_notifications))
+    SettingRow(
+        stringResource(Res.string.settings_checks),
+        icon = Lucide.Bell,
+        detail = stringResource(if (denied) Res.string.settings_checks_denied else Res.string.settings_checks_detail),
+        onClick = {
+            if (on) {
+                watch.setEnabled(false)
+            } else {
+                ask { granted ->
+                    denied = !granted
+                    if (granted) watch.setEnabled(true)
+                }
+            }
+        },
+    ) {
+        Switch(checked = on, onCheckedChange = null)
+    }
+    RowDivider()
+    if (on) {
+        SettingRow(
+            stringResource(Res.string.settings_notify_incidents),
+            icon = Lucide.Siren,
+            detail = stringResource(Res.string.settings_notify_incidents_detail),
+            onClick = { watch.setIncidents(!incidents) },
+        ) {
+            Switch(checked = incidents, onCheckedChange = null)
+        }
+        RowDivider()
+        SettingRow(
+            stringResource(Res.string.settings_notify_apps),
+            icon = Lucide.Server,
+            detail = stringResource(Res.string.settings_notify_apps_detail),
+            onClick = { watch.setApps(!apps) },
+        ) {
+            Switch(checked = apps, onCheckedChange = null)
+        }
+        RowDivider()
     }
 }
 

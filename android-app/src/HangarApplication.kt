@@ -7,6 +7,6 @@ import dev.ggoggam.hangar.app.session.androidPlatformModule
 class HangarApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        initHangar(androidPlatformModule(this))
+        initHangar(androidPlatformModule(this, R.drawable.ic_notification))
     }
 }

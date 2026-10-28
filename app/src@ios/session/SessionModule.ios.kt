@@ -2,6 +2,10 @@ package dev.ggoggam.hangar.app.session
 
 import dev.ggoggam.hangar.app.di.SESSION_NAME
 import dev.ggoggam.hangar.app.settings.SettingsStore
+import dev.ggoggam.hangar.app.watch.BackgroundChecks
+import dev.ggoggam.hangar.app.watch.IosBackgroundChecks
+import dev.ggoggam.hangar.app.watch.IosNotifier
+import dev.ggoggam.hangar.app.watch.Notifier
 import dev.ggoggam.hangar.core.TokenStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -34,6 +38,8 @@ fun iosPlatformModule(
             }
         }
         single { signIn }
+        single<BackgroundChecks> { IosBackgroundChecks() }
+        single<Notifier> { IosNotifier() }
         // iOS doesn't tell apps the name the user gave the phone, only "iPhone" or "iPad".
         single(SESSION_NAME) { "Hangar on ${UIDevice.currentDevice.model}" }
     }

@@ -44,6 +44,9 @@ import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentBanner
 import dev.ggoggam.hangar.app.status.IncidentFeed
 import dev.ggoggam.hangar.app.storage.StorageScreen
+import dev.ggoggam.hangar.app.watch.BackgroundChecks
+import dev.ggoggam.hangar.app.watch.WatchSettings
+import dev.ggoggam.hangar.app.watch.keepScheduled
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlySession
 import kotlinx.coroutines.delay
@@ -58,7 +61,12 @@ fun App() {
     SystemBars(dark)
     HangarTheme(darkTheme = dark ?: isSystemInDarkTheme()) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            val token by koinInject<FlySession>().token.collectAsStateWithLifecycle()
+            val session = koinInject<FlySession>()
+            val token by session.token.collectAsStateWithLifecycle()
+            val watch = koinInject<WatchSettings>()
+            val checks = koinInject<BackgroundChecks>()
+            // Background checks follow the switch in Settings and the session.
+            LaunchedEffect(session, watch, checks) { keepScheduled(session, watch, checks) }
             if (token == null) {
                 LoginScreen(koinViewModel())
             } else {

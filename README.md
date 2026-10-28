@@ -116,7 +116,7 @@ The bottom bar switches between the app list and three more screens:
 |---|---|
 | Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. Open incidents are listed at the top of the app list, and a dismissable banner runs across the top of every screen while any is open, as flyctl warns before its commands. Checked every minute while the app is in front. A link opens status.fly.io in the browser, as `fly platform status` does. |
 | Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). |
-| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
+| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the background checks below, the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
 
 The app list opens with an estimate of each organization's usage over the last 14 days, and each
 app's share under its name. Neither flyctl nor Fly.io's API reports bills, so Hangar works it out
@@ -131,6 +131,29 @@ and it goes stale when Fly.io changes its prices, so update `FlyPrices` when the
 Everything except GraphQL takes `FlyV1` with only the macaroons (`FlyToken.machinesHeader`). An
 OAuth-only `Bearer` token gets a 401 there. The older Managed Postgres list is the exception: like
 flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
+
+## Notifications
+
+Turned on in Settings, Hangar checks Fly.io in the background and notifies you of what's new
+since it last looked (`core/src/FlyWatch.kt`). There's no push server: the phone itself asks
+Fly.io, the same calls the screens make, and posts the notifications. On Android, WorkManager runs
+the check about every 15 minutes while there's a network, though Doze and battery saver can hold
+it back.
+
+| Notification | Source |
+|---|---|
+| Fly.io incident opened or resolved | `incidents.flyio.net/v1/incidents`, as the status banner reads it. |
+| Host issue | GraphQL `app.hostIssues` for each deployed app (`fly incidents hosts list`). |
+| Machine failed | A machine in the `failed` state, from `api.machines.dev/v1/apps/{app}/machines` (`fly status`). |
+| Machine crashed or ran out of memory | An `exit` event since the last check with a non-zero exit code or `oom_killed`, leaving out the stops someone asked for (`requested_stop`: autostop, deploys, `fly machine stop`). |
+| Health checks failing | A started machine's checks critical at two checks running, since they fail for a moment while a machine starts or deploys. |
+| Signed out | Fly.io turned the login down, so the checks have stopped. |
+
+The first check only takes note of what's already wrong, so turning the checks on doesn't bring a
+burst of notifications for problems the app list shows anyway. After that each problem is
+notified once, and again only if it clears and comes back. An app or feed that can't be reached
+keeps what was known about it, so a network failure never reads as a problem resolved. Apps are
+checked four at a time, two calls each. The demo is never checked.
 
 ## Privacy
 
@@ -148,7 +171,10 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   "Open status.fly.io" hand a link to your browser; the app itself doesn't connect to either.
   Renewing a token's auth discharge goes to the third party the token names, and
   `FlyDischarges` refuses any host but `api.fly.io` and `auth.fly.io`, so your OAuth token can't
-  be sent anywhere else. On Android the only permission it asks for is `INTERNET`. "Try the
+  be sent anywhere else. The background checks call the same hosts. On Android the only
+  permissions it asks for are `INTERNET`, and `POST_NOTIFICATIONS` when you turn the background
+  checks on; WorkManager adds the ones it needs to run and reschedule them (`WAKE_LOCK`,
+  `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`). "Try the
   demo" connects to nothing: while it's signed in, the screens get a client that answers every
   call from sample data built into the app (`core/src/FlyDemo.kt`).
 - **What it sends.** Your Fly.io token, to Fly.io. When you sign in, a name for the login
@@ -160,9 +186,14 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   and the app only gets the code Fly.io shows afterwards.
 - **What it keeps.** The token, on the device: sealed under an Android Keystore key and
   excluded from backups (`allowBackup="false"`), or in the iOS Keychain for this device only.
-  Signing out deletes it. Besides that, only whether you picked dark or light mode, in
-  SharedPreferences or NSUserDefaults. Your email, apps, logs and metrics are held in memory while they're on
-  screen: the app never writes them to disk, logs them or sends them anywhere. Its HTTP clients
+  Signing out deletes it. Besides that, only whether you picked dark or light mode and which
+  notifications you want, in SharedPreferences or NSUserDefaults, and for the background checks,
+  what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
+  and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
+  notified, never an app's or machine's name. Your email, apps, logs and metrics are held in
+  memory while they're on screen: the app never writes them to disk, logs them or sends them
+  anywhere. A notification does name the app it's about, and the system keeps it until you
+  dismiss it. Its HTTP clients
   keep no response cache and no cookies (`core/src@android`, `core/src@ios`).
 
 ## Contributing

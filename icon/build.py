@@ -10,7 +10,7 @@ colour or shape, since Hangar isn't Fly.io's app.
 The mark is drawn on Android's 108 dp adaptive icon canvas. A launcher shows the middle 72 dp, and
 the mark stays inside the 66 dp safe zone that every mask keeps. iOS gets the same 72 dp square.
 
-Writes the Android foreground (also the themed icon's monochrome layer), the iOS icon's light,
+Writes the Android foreground (also the themed icon's monochrome layer) and status bar icon, the iOS icon's light,
 dark and tinted images, the light and dark logos the README shows, and Google Play's 512 px icon
 and 1024 x 500 feature graphic, which set the name in the app's own font. The rest of the icon (the adaptive icon, its background colour and the
 asset catalogue's Contents.json) is written by hand.
@@ -25,6 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 ANDROID = ROOT / "android-app" / "res" / "drawable" / "ic_launcher_foreground.xml"
+NOTIFICATION = ROOT / "android-app" / "res" / "drawable" / "ic_notification.xml"
 IOS = ROOT / "ios-app" / "src" / "Assets.xcassets" / "AppIcon.appiconset"
 LOGO = ROOT / "icon"
 STORE = ROOT / "store"
@@ -128,6 +129,32 @@ def write_android():
     )
 
 
+def write_notification():
+    # The status bar shows only the shape, in white, so the mark fills a 48 unit square centred on
+    # it, leaving the margin Android's status bar icons keep.
+    span = 48
+    left = CENTRE - span / 2
+    top = BASELINE - RADIUS / 2 - span / 2
+    NOTIFICATION.write_text(
+        f"""<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by icon/build.py; change the icon there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="{span}"
+    android:viewportHeight="{span}">
+    <group
+        android:translateX="{-left:g}"
+        android:translateY="{-top:.2f}">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="{path_data()}" />
+    </group>
+</vector>
+"""
+    )
+
+
 def write_ios():
     IOS.mkdir(parents=True, exist_ok=True)
     # The light icon can't have an alpha channel: App Store Connect rejects one that does.
@@ -177,7 +204,8 @@ def write_store():
 
 if __name__ == "__main__":
     write_android()
+    write_notification()
     write_ios()
     write_logo()
     write_store()
-    print(f"Wrote {ANDROID.relative_to(ROOT)}, {IOS.relative_to(ROOT)}, {LOGO.relative_to(ROOT)}/logo*.svg and {STORE.relative_to(ROOT)}")
+    print(f"Wrote {ANDROID.relative_to(ROOT)}, {NOTIFICATION.relative_to(ROOT)}, {IOS.relative_to(ROOT)}, {LOGO.relative_to(ROOT)}/logo*.svg and {STORE.relative_to(ROOT)}")
