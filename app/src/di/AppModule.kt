@@ -9,6 +9,7 @@ import dev.ggoggam.hangar.app.settings.RegionsViewModel
 import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentFeed
+import dev.ggoggam.hangar.app.storage.ClusterViewModel
 import dev.ggoggam.hangar.app.storage.StorageViewModel
 import dev.ggoggam.hangar.app.watch.NotificationLinks
 import dev.ggoggam.hangar.app.watch.WatchSettings
@@ -16,6 +17,7 @@ import dev.ggoggam.hangar.app.watch.Watcher
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyIncidents
 import dev.ggoggam.hangar.core.FlyLogin
+import dev.ggoggam.hangar.core.FlyOrganization
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.flyDemoHttpClient
 import dev.ggoggam.hangar.core.flyHttpClient
@@ -61,6 +63,7 @@ private val appModule =
         viewModel { LoginViewModel(get(), get(), get(LIVE_HTTP), get(), get(SESSION_NAME)) }
         viewModel { AppsViewModel(get(), get(), get(), get()) }
         viewModel { StorageViewModel(get(), get()) }
+        viewModel { (id: String, org: String, rawOrg: String) -> ClusterViewModel(id, FlyOrganization(org, rawOrg), get(), get()) }
         viewModel { SettingsViewModel(get(), get()) }
         viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }
         viewModel { RegionsViewModel(get(), get()) }

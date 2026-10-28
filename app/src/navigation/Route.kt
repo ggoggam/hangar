@@ -21,6 +21,19 @@ sealed interface Route {
         val name: String,
     ) : Route
 
+    /**
+     * One Managed Postgres cluster. [org] is its organization's slug as flyctl shows it, which its
+     * attached apps' dashboards take, and [rawOrg] the real one, which the Managed Postgres APIs
+     * take. [name] titles the screen.
+     */
+    @Serializable
+    data class PostgresCluster(
+        val id: String,
+        val name: String,
+        val org: String,
+        val rawOrg: String,
+    ) : Route
+
     /** Fly.io's regions. */
     @Serializable
     data object Regions : Route

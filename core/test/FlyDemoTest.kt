@@ -190,6 +190,16 @@ class FlyDemoTest {
             assertEquals(10, team.diskGb)
             assertEquals(listOf("api"), team.attachedApps)
             assertTrue(postgres.clusters(orgs.first { it.slug == "personal" }).isEmpty())
+            val cluster = postgres.cluster(team.id, orgs.first { it.slug == "demo-team" })
+            assertEquals("orders", cluster.name)
+            assertEquals("17", cluster.postgresVersion)
+            assertEquals(listOf("api"), cluster.attachedApps)
+            assertEquals(listOf("fly-db", "orders"), postgres.databases(cluster))
+            assertEquals(3, postgres.users(cluster).size)
+            val backups = postgres.backups(cluster)
+            assertEquals(8, backups.size)
+            assertTrue(backups.any { it.type == "full" })
+            assertFailsWith<FlyApiException> { postgres.cluster("not-a-cluster", orgs.first { it.slug == "demo-team" }) }
 
             val regions = FlyMachines(http, token).regions()
             assertEquals("nrt", regions.nearest)

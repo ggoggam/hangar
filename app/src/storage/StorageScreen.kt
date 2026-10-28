@@ -50,6 +50,7 @@ import org.jetbrains.compose.resources.stringResource
 fun StorageScreen(
     vm: StorageViewModel,
     onOpenApp: (FlyApp) -> Unit,
+    onOpenCluster: (FlyPostgresCluster) -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -67,7 +68,7 @@ fun StorageScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                titled(Res.string.data_mpg, state.managedPostgres, "mpg", key = { it.id }) { ClusterCard(it) }
+                titled(Res.string.data_mpg, state.managedPostgres, "mpg", key = { it.id }) { ClusterCard(it) { onOpenCluster(it) } }
                 titled(Res.string.data_postgres, state.postgresApps, "pg", key = { it.name }) { PostgresAppRow(it) { onOpenApp(it) } }
                 titled(Res.string.data_redis, state.redis, "redis", key = { it.id.ifEmpty { it.name } }) { RedisCard(it) }
                 titled(Res.string.data_tigris, state.tigris, "tigris", key = { it.id.ifEmpty { it.name } }) { BucketCard(it) }
@@ -94,19 +95,21 @@ private fun <T> LazyListScope.titled(
     }
 }
 
-/** A Managed Postgres cluster, as a row of `fly mpg list`. */
+/** A Managed Postgres cluster, as a row of `fly mpg list`: it opens the cluster's page. */
 @Composable
-private fun ClusterCard(cluster: FlyPostgresCluster) {
-    Panel {
+private fun ClusterCard(
+    cluster: FlyPostgresCluster,
+    onClick: () -> Unit,
+) {
+    Panel(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(cluster.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            StatusBadge(
-                cluster.status,
-                when (cluster.status) {
-                    "ready" -> Tone.Ok
-                    "failed", "error" -> Tone.Error
-                    else -> Tone.Warning
-                },
+            StatusBadge(cluster.status, clusterTone(cluster.status))
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
         }
         Detail(
@@ -128,6 +131,14 @@ private fun ClusterCard(cluster: FlyPostgresCluster) {
         )
     }
 }
+
+/** A Managed Postgres cluster's status: `ready`, `failed` or `error`, or on its way to one. */
+internal fun clusterTone(status: String) =
+    when (status) {
+        "ready" -> Tone.Ok
+        "failed", "error" -> Tone.Error
+        else -> Tone.Warning
+    }
 
 /** An unmanaged Postgres cluster, which is an app of its own: it opens that app's dashboard. */
 @Composable

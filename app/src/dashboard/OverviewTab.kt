@@ -368,29 +368,8 @@ private fun VolumeRow(volume: FlyVolume) {
         val total = volume.bytesTotal
         val usedFraction = volume.usedFraction
         if (used != null && total != null && usedFraction != null) {
-            val fraction = usedFraction.toFloat()
-            val colors = LocalStatusColors.current
-            // Red from where the background checks notify, amber a while before.
-            val tone =
-                when {
-                    volume.nearlyFull -> colors.error
-                    usedFraction >= VOLUME_FILLING -> colors.warning
-                    else -> null
-                }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(fraction)
-                        .height(6.dp)
-                        .background(tone ?: MaterialTheme.colorScheme.primary),
-                )
-            }
+            val tone = usageTone(usedFraction)
+            UsageBar(usedFraction, tone)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${bytes(used.toDouble())} / ${bytes(total.toDouble())}",
@@ -408,8 +387,44 @@ private fun VolumeRow(volume: FlyVolume) {
     }
 }
 
-/** Where a volume's bar turns amber, on its way to [FlyVolume.NEARLY_FULL]. */
+/** Where a disk's bar turns amber, on its way to [FlyVolume.NEARLY_FULL]. */
 private const val VOLUME_FILLING = 0.75
+
+/**
+ * The color for a disk [fraction] used: red from [FlyVolume.NEARLY_FULL], where the background
+ * checks notify, amber a while before, and null, the usual color, below that.
+ */
+@Composable
+internal fun usageTone(fraction: Double): Color? {
+    val colors = LocalStatusColors.current
+    return when {
+        fraction >= FlyVolume.NEARLY_FULL -> colors.error
+        fraction >= VOLUME_FILLING -> colors.warning
+        else -> null
+    }
+}
+
+/** A bar [fraction] full, in [tone] or else the primary color: a volume's or a database's disk. */
+@Composable
+internal fun UsageBar(
+    fraction: Double,
+    tone: Color?,
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(fraction.toFloat())
+                .height(6.dp)
+                .background(tone ?: MaterialTheme.colorScheme.primary),
+        )
+    }
+}
 
 @Composable
 private fun IpRow(ip: FlyIp) {

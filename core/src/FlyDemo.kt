@@ -136,6 +136,10 @@ private class FlyDemo(
                         }
                     }
                 }
+                MANAGED_POSTGRES.matchEntire(path)?.let {
+                    if (it.groupValues[1] != MPG["id"]) throw NotInDemo()
+                    return managedPostgresCluster(it.groupValues[2])
+                }
                 when (path) {
                     "/v1/platform/regions" -> obj("Regions" to REGIONS.map(::region), "nearest" to "nrt")
                     "/v1/postgres" -> managedPostgres(param("org_slug"))
@@ -536,6 +540,73 @@ private class FlyDemo(
                 },
         )
 
+    // The cluster's page, as the Machines API's `/v1/postgres/{id}` and the lists under it answer.
+    // Backups every six hours, a full one each midnight (UTC) and incremental ones between.
+
+    private fun managedPostgresCluster(list: String): JsonElement =
+        when (list) {
+            "/databases" -> {
+                obj("data" to listOf("fly-db", "orders").map { mapOf("name" to it) })
+            }
+
+            "/users" -> {
+                obj(
+                    "data" to
+                        listOf("fly-user" to "schema_admin", "orders_app" to "writer", "metabase" to "reader").map { (name, role) ->
+                            mapOf("username" to name, "role" to role)
+                        },
+                )
+            }
+
+            "/backups" -> {
+                val latest = now / (6 * HOUR) * (6 * HOUR)
+                obj(
+                    "data" to
+                        (0 until 8).map { i ->
+                            val start = latest - i * 6 * HOUR
+                            val full = start % DAY == 0L
+                            mapOf(
+                                "id" to "demo-backup-${start / HOUR}",
+                                "status" to "completed",
+                                "type" to if (full) "full" else "incr",
+                                "size_bytes" to if (full) 1_288_490_189L else 41_943_040L + i * 1_048_576L,
+                                "started_at" to iso(start),
+                                "finished_at" to iso(start + if (full) 240 else 30),
+                            )
+                        },
+                )
+            }
+
+            else -> {
+                obj(
+                    "data" to
+                        MPG +
+                        mapOf(
+                            "disk_size_gb" to 10,
+                            "storage_used_bytes" to 2_469_606_195L,
+                            "storage_provisioned_bytes" to 10_737_418_240L,
+                            "cpus" to 2,
+                            "cpu_kind" to "shared",
+                            "memory_mb" to 1024,
+                            "replicas" to 1,
+                            "pg_major_version" to "17",
+                            "postgis_enabled" to false,
+                            "endpoints" to
+                                mapOf(
+                                    "primary" to
+                                        mapOf(
+                                            "direct" to mapOf("host" to "direct.demo-mpg.flympg.net", "port" to 5432),
+                                            "pooler" to mapOf("host" to "pgbouncer.demo-mpg.flympg.net", "port" to 5432),
+                                        ),
+                                ),
+                            "organization" to mapOf("name" to TEAM.name, "slug" to TEAM.rawSlug),
+                            "created_at" to iso(now - 41 * DAY),
+                            "attached_apps" to listOf(mapOf("name" to "api")),
+                        ),
+                )
+            }
+        }
+
     // Logs: a line every few seconds from each running machine, the same lines for the same moment.
 
     private fun logs(
@@ -718,6 +789,7 @@ private class FlyDemo(
         val LOGS = Regex("/api/v1/apps/([^/]+)/logs")
         val PROMETHEUS = Regex("/prometheus/([^/]+)/api/v1/(query|query_range)")
         val OLDER_POSTGRES = Regex("/api/v1/organizations/([^/]+)/postgres")
+        val MANAGED_POSTGRES = Regex("/v1/postgres/([^/]+)(|/databases|/users|/backups)")
         val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates|secrets)")
         val MACHINE = Regex("/v1/apps/([^/]+)/machines/([^/]+)(|/lease|/wait|/start|/stop|/suspend|/restart)")
         val APP = Regex("/v1/apps/([^/]+)")
