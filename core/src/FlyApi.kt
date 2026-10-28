@@ -182,7 +182,7 @@ class FlyApi(
             }
         """
 
-        const val RELEASE_FIELDS = "id version description reason status imageRef stable user { email } createdAt"
+        const val RELEASE_FIELDS = "id version description reason status imageRef stable user { email name } createdAt"
 
         // fly-go's GetAppCompact, the app half of `fly status`.
         const val APP_QUERY = """
@@ -459,12 +459,46 @@ class FlyRelease(
     val stable: Boolean = false,
     val user: FlyUser? = null,
     val updatedAt: String = "",
-)
+) {
+    /** Whether it went out, as opposed to failing, being interrupted or still running. */
+    val succeeded: Boolean get() = status == "complete" || status == "succeeded"
+}
 
 @Serializable
 class FlyUser(
     val email: String = "",
+    val name: String? = null,
 )
+
+/** What a release changed from the one that went out before it. */
+sealed interface FlyReleaseChange {
+    /** The release before it that went out. */
+    val previous: FlyRelease
+
+    /** It deployed a different image from [previous]'s. */
+    class NewImage(
+        override val previous: FlyRelease,
+    ) : FlyReleaseChange
+
+    /** It kept [previous]'s image, so its config or secrets changed, or it was the same deploy again. */
+    class SameImage(
+        override val previous: FlyRelease,
+    ) : FlyReleaseChange
+}
+
+/**
+ * What [release] changed from the latest earlier release in [releases] that went out, by their
+ * image refs, as comparing `fly releases --image` rows would show. Null when no earlier one in
+ * [releases] went out, or either has no image ref.
+ */
+fun releaseChange(
+    release: FlyRelease,
+    releases: List<FlyRelease>,
+): FlyReleaseChange? {
+    val previous = releases.filter { it.version < release.version && it.succeeded }.maxByOrNull { it.version } ?: return null
+    if (release.imageRef.isEmpty() || previous.imageRef.isEmpty()) return null
+    return if (release.imageRef == previous.imageRef) FlyReleaseChange.SameImage(previous) else FlyReleaseChange.NewImage(previous)
+}
 
 sealed class FlyApiException(
     message: String,

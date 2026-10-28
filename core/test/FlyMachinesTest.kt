@@ -65,6 +65,79 @@ class FlyMachinesTest {
         }
 
     @Test
+    fun readsOneMachineAsMachineStatusShowsIt() =
+        runTest {
+            // Abridged from a real answer: the init command and env are in the config too, and aren't decoded.
+            val fly =
+                MockFly(
+                    HttpStatusCode.OK to
+                        """
+                        {"id":"m1","name":"late-morning","state":"started","region":"nrt","host_status":"ok",
+                         "instance_id":"01K8ABCDEF","version":"01K8ABCDEF","private_ip":"fdaa:0:1:a7b:2:3:4:2",
+                         "image_ref":{"registry":"registry.fly.io","repository":"web","tag":"deployment-01","digest":"sha256:x",
+                                      "labels":{"fly.version":"v0.2.1"}},
+                         "config":{"guest":{"cpu_kind":"performance","cpus":2,"memory_mb":4096},
+                                   "init":{"cmd":["serve","--token","t"]},"env":{"SECRET":"s"},
+                                   "mounts":[{"volume":"vol_1","path":"/data","name":"data","size_gb":3}],
+                                   "services":[{"protocol":"tcp","internal_port":8080,"autostop":true,"autostart":true,
+                                                "min_machines_running":0,
+                                                "ports":[{"port":80,"handlers":["http"],"force_https":true},
+                                                         {"port":443,"handlers":["tls","http"]}]},
+                                               {"protocol":"udp","internal_port":5000,"autostop":"suspend",
+                                                "ports":[{"start_port":5000,"end_port":5010}]}]},
+                         "checks":[{"name":"servicecheck-00-http-8080","status":"critical","output":"connection refused",
+                                    "updated_at":"2026-10-25T16:22:50Z"}],
+                         "events":[{"type":"exit","status":"stopped","source":"flyd","timestamp":1792945370046,
+                                    "request":{"exit_event":{"exit_code":137,"oom_killed":true,"requested_stop":false}}},
+                                   {"type":"stop","status":"stopping","source":"user","timestamp":1792945360000,
+                                    "request":{"exit_event":{"exit_code":0,"requested_stop":true}}}]}
+                        """,
+                )
+
+            val m = FlyMachines(fly.http, MIXED_TOKEN, "https://m.test").machine("web", "m1")
+
+            val request = fly.requests.single()
+            assertEquals("https://m.test/v1/apps/web/machines/m1", request.url.toString())
+            assertEquals("FlyV1 fm2_a,fm2_b", request.headers[HttpHeaders.Authorization])
+            assertEquals("01K8ABCDEF", m.instanceId)
+            assertEquals("fdaa:0:1:a7b:2:3:4:2", m.privateIp)
+            assertEquals("registry.fly.io/web:deployment-01@sha256:x", m.imageRef?.full)
+            assertEquals("v0.2.1", m.imageRef?.version)
+            assertEquals("performance-2x", m.config?.guest?.size)
+            assertEquals(
+                3,
+                m.config
+                    ?.mounts
+                    ?.single()
+                    ?.sizeGb,
+            )
+            val (http, udp) = m.config?.services.orEmpty()
+            assertEquals(listOf("80", "443"), http.ports.map { it.label })
+            assertTrue(http.ports[0].forceHttps)
+            assertEquals(listOf("tls", "http"), http.ports[1].handlers)
+            // Older machines answer true or false, newer ones a word.
+            assertEquals("stop", http.autostop)
+            assertEquals("suspend", udp.autostop)
+            assertEquals("5000-5010", udp.ports.single().label)
+            assertEquals("connection refused", m.checks.single().output)
+            assertTrue(m.events[0].oomKilled)
+            assertEquals(137, m.events[0].exitCode)
+            assertTrue(m.events[1].requestedStop)
+        }
+
+    @Test
+    fun fallsBackToTheIncompleteConfigWhenTheHostIsUnreachable() {
+        val m =
+            FlyJson.decodeFromString(
+                FlyMachine.serializer(),
+                """{"id":"m1","state":"started","host_status":"unreachable",
+                    "incomplete_config":{"guest":{"cpu_kind":"shared","cpus":1,"memory_mb":256}}}""",
+            )
+        assertEquals("shared-cpu-1x", m.config?.guest?.size)
+        assertNull(m.imageRef?.version)
+    }
+
+    @Test
     fun readsVolumesIpsAndCertificates() =
         runTest {
             val fly =

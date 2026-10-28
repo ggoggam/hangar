@@ -43,6 +43,8 @@ import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
+import dev.ggoggam.hangar.core.FlyMachine
+import dev.ggoggam.hangar.core.FlyRelease
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -63,6 +65,8 @@ fun AppDashboardScreen(
     vm: AppDashboardViewModel,
     onBack: () -> Unit,
     initialTab: DashboardTab = DashboardTab.Overview,
+    onMachine: (FlyMachine) -> Unit = {},
+    onRelease: (FlyRelease) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(initialTab.ordinal) }
@@ -123,8 +127,8 @@ fun AppDashboardScreen(
                     ) {
                         when (DashboardTab.entries[tab]) {
                             DashboardTab.Overview -> overview(state, vm::setWindow, vm::restartApp)
-                            DashboardTab.Machines -> machines(state.machines, state.busy, vm::act)
-                            DashboardTab.Releases -> releases(state.releases)
+                            DashboardTab.Machines -> machines(state.machines, state.busy, vm::act, onMachine)
+                            DashboardTab.Releases -> releases(state.releases, onRelease)
                             DashboardTab.Secrets -> secrets(state)
                             DashboardTab.Logs -> Unit
                         }
@@ -162,7 +166,7 @@ internal fun <T> LazyListScope.section(
 
 /** A card of shimmering bars, roughly the shape of a title and two lines under it. */
 @Composable
-private fun PlaceholderCard() {
+internal fun PlaceholderCard() {
     Panel {
         ShimmerBar(Modifier.fillMaxWidth(0.4f).height(18.dp))
         ShimmerBar(Modifier.fillMaxWidth(0.7f).height(12.dp))

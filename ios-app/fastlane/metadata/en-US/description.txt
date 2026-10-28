@@ -6,8 +6,8 @@ WHAT IT SHOWS
 • Your apps across every organization, with an estimate of each organization's usage over the last 14 days and each app's share of it, a search, and the apps you pin at the top
 • Each app's overview: status, hostname, volumes and how full they are, IP addresses and certificates
 • Metrics from Fly.io's managed Prometheus: CPU, memory, requests, errors and p95 latency over 1, 6 or 24 hours
-• Machines, with their region, size, state and health checks
-• The last 25 releases
+• Machines, with their region, size, state and health checks, and each one's details: image, private IP, volumes, services, check output and recent events such as exits and out-of-memory kills
+• The last 25 releases, each with who deployed it, its image and whether the image changed
 • Secrets' names, digests and whether they're deployed, never their values
 • Live logs, with JSON log lines shown as readable fields, search and an errors filter
 • Managed Postgres, Postgres apps, Upstash Redis and Tigris storage

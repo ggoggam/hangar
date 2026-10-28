@@ -257,12 +257,24 @@ private class FlyDemo(
             "description" to if (failed) "Release failed" else "Deploy image",
             "reason" to "deploy",
             "status" to if (failed) "failed" else "complete",
-            "imageRef" to "registry.fly.io/${app.name}:deployment-${version.toString().padStart(4, '0')}",
+            "imageRef" to "registry.fly.io/${app.name}:${imageTag(app, version)}",
             "stable" to !failed,
-            "user" to mapOf("email" to if (version % 3 == 0) "sam@example.com" else EMAIL),
+            "user" to if (version % 3 == 0) mapOf("email" to "sam@example.com", "name" to "Sam Rivera") else viewer() + ("name" to "Demo"),
             "createdAt" to releasedAt(app, version),
             "updatedAt" to releasedAt(app, version),
         )
+    }
+
+    /**
+     * The image a release deployed: each its own, but the one before the latest kept the image before
+     * it, as setting a secret does.
+     */
+    private fun imageTag(
+        app: DemoApp,
+        version: Int,
+    ): String {
+        val built = if (version == app.releases - 1) version - 1 else version
+        return "deployment-${built.toString().padStart(4, '0')}"
     }
 
     /** The latest release went out three hours ago, and each before it about a day and a half earlier. */
@@ -345,19 +357,29 @@ private class FlyDemo(
         m: DemoMachine,
     ): Map<String, Any?> {
         val started = now - (2 * DAY + noise(m.id.hashCode(), 1) * DAY).toLong()
+        // Until an action restarts it, the machine that ran out of memory fails its check.
+        val failing = m.outOfMemory && m.id !in states.value
+        // The same made-up id for a machine each time, in a ULID's alphabet and length.
+        val instance = ("01K8" + m.id.uppercase() + "QX7R2M3N5P").take(26)
+        // In Fly.io's private fdaa::/16 range, which isn't reachable from the internet.
+        val privateIp = "fdaa:0:${app.org.numericId.toInt().toString(16)}:a7b:${m.id.take(4)}:${m.id.substring(4, 8)}:2"
+        val oomAt = now - 40 * 60
         return mapOf(
             "id" to m.id,
             "name" to m.name,
             "state" to stateOf(m),
             "region" to m.region,
             "host_status" to "ok",
+            "instance_id" to instance,
+            "version" to instance,
+            "private_ip" to privateIp,
             "created_at" to iso(started - 20 * DAY),
-            "updated_at" to iso(started),
+            "updated_at" to iso(if (m.outOfMemory) oomAt else started),
             "image_ref" to
                 mapOf(
                     "registry" to "registry.fly.io",
                     "repository" to app.name,
-                    "tag" to "deployment-${app.releases.toString().padStart(4, '0')}",
+                    "tag" to imageTag(app, app.releases),
                     "digest" to "sha256:${m.id}",
                 ),
             "config" to
@@ -365,34 +387,86 @@ private class FlyDemo(
                     "guest" to mapOf("cpu_kind" to m.cpuKind, "cpus" to m.cpus, "memory_mb" to m.memoryMb),
                     "metadata" to mapOf("fly_process_group" to m.group, "fly_release_version" to app.releases.toString()),
                     "mounts" to
-                        app.volumes.filter { it.machine == m.id }.map { mapOf("volume" to it.id, "path" to "/data", "name" to it.name) },
+                        app.volumes.filter { it.machine == m.id }.map {
+                            mapOf("volume" to it.id, "path" to "/data", "name" to it.name, "size_gb" to it.sizeGb)
+                        },
+                    "services" to services(app),
                 ),
             "checks" to
-                if (m.check == null || stateOf(m) != "started") {
-                    emptyList()
-                } else {
-                    listOf(mapOf("name" to m.check, "status" to "passing", "output" to "OK", "updated_at" to iso(now - 12)))
+                when {
+                    m.check == null || stateOf(m) != "started" -> {
+                        emptyList()
+                    }
+
+                    failing -> {
+                        listOf(
+                            mapOf(
+                                "name" to m.check,
+                                "status" to "critical",
+                                "output" to
+                                    "Get \"http://[$privateIp]:8080/healthz\": " +
+                                    "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+                                "updated_at" to iso(now - 9),
+                            ),
+                        )
+                    }
+
+                    else -> {
+                        listOf(mapOf("name" to m.check, "status" to "passing", "output" to "OK", "updated_at" to iso(now - 12)))
+                    }
                 },
             "events" to
                 listOfNotNull(
-                    if (m.state ==
-                        "stopped"
-                    ) {
-                        mapOf(
-                            "type" to "exit",
-                            "status" to "stopped",
-                            "source" to "flyd",
-                            "timestamp" to (started + 6 * HOUR) * 1000,
-                            "request" to mapOf("exit_event" to mapOf("exit_code" to 0, "oom_killed" to false)),
-                        )
+                    if (m.outOfMemory) {
+                        mapOf("type" to "start", "status" to "started", "source" to "flyd", "timestamp" to (oomAt + 2) * 1000)
                     } else {
                         null
                     },
+                    if (m.outOfMemory) {
+                        exit(oomAt, code = 137, oom = true, requested = false)
+                    } else {
+                        null
+                    },
+                    if (m.state == "stopped") exit(started + 6 * HOUR, code = 0, oom = false, requested = true) else null,
                     mapOf("type" to "start", "status" to "started", "source" to "flyd", "timestamp" to started * 1000),
                     mapOf("type" to "launch", "status" to "created", "source" to "user", "timestamp" to (started - 4) * 1000),
                 ),
         )
     }
+
+    private fun exit(
+        at: Long,
+        code: Int,
+        oom: Boolean,
+        requested: Boolean,
+    ) = mapOf(
+        "type" to "exit",
+        "status" to "stopped",
+        "source" to "flyd",
+        "timestamp" to at * 1000,
+        "request" to mapOf("exit_event" to mapOf("exit_code" to code, "oom_killed" to oom, "requested_stop" to requested)),
+    )
+
+    /** An HTTP service on 8080 for an app with a hostname, as `fly launch` sets one up. */
+    private fun services(app: DemoApp): List<Map<String, Any?>> =
+        if (app.hostnames.isEmpty()) {
+            emptyList()
+        } else {
+            listOf(
+                mapOf(
+                    "protocol" to "tcp",
+                    "internal_port" to 8080,
+                    "autostop" to "stop",
+                    "autostart" to true,
+                    "min_machines_running" to 1,
+                    "ports" to
+                        listOf(
+                            mapOf("port" to 80, "handlers" to listOf("http"), "force_https" to true),
+                            mapOf("port" to 443, "handlers" to listOf("tls", "http")),
+                        ),
+                ),
+            )
+        }
 
     /**
      * The usual secrets, set well before the release the machines run, and on `web` one set since,
@@ -721,6 +795,8 @@ private class DemoMachine(
     val memoryMb: Int = 256,
     val group: String = "app",
     val check: String? = "servicecheck-00-http-8080",
+    /** Ran out of memory a while ago, was restarted by Fly.io, and has failed its check since. */
+    val outOfMemory: Boolean = false,
 )
 
 private class DemoVolume(
@@ -830,7 +906,7 @@ private val APPS =
                 listOf(
                     DemoMachine("148e270c5d6389", "bold-sun-8812", "nrt", cpus = 2, memoryMb = 1024),
                     DemoMachine("3d8d9e1b2c4f70", "misty-river-1404", "nrt", cpus = 2, memoryMb = 1024),
-                    DemoMachine("9185e3a6f0d221", "steady-pine-3377", "iad", cpus = 2, memoryMb = 1024),
+                    DemoMachine("9185e3a6f0d221", "steady-pine-3377", "iad", cpus = 2, memoryMb = 1024, outOfMemory = true),
                 ),
             hostnames = listOf("api.example.com"),
             cpuPercent = 27.0,

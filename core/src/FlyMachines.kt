@@ -26,6 +26,15 @@ class FlyMachines(
             .getJson<List<FlyMachine>>("$machinesUrl/v1/apps/$app/machines", token.machinesHeader)
             .filter { it.isActive }
 
+    /**
+     * One machine with all that `fly machine status` shows: its checks with their output, its recent
+     * events and the parts of its config below. fly-go's flaps.Client.Get, whose answer carries the events.
+     */
+    suspend fun machine(
+        app: String,
+        id: String,
+    ): FlyMachine = http.getJson("$machinesUrl/v1/apps/$app/machines/$id", token.machinesHeader)
+
     /** The app's volumes, without the ones on their way out, as `fly volumes list` shows them. */
     suspend fun volumes(app: String): List<FlyVolume> =
         http
@@ -76,11 +85,23 @@ class FlyMachine(
     /** `ok`, or `unknown` / `unreachable` when Fly.io can't reach the machine's host. */
     @SerialName("host_status") val hostStatus: String = "ok",
     @SerialName("image_ref") val imageRef: FlyImageRef? = null,
-    // The config also holds env, which can carry secrets, so only these parts of it are decoded.
-    val config: FlyMachineConfig? = null,
+    /** Changes with each update of the machine's config. */
+    @SerialName("instance_id") val instanceId: String = "",
+    val version: String = "",
+    /** Its address on the organization's private network. */
+    @SerialName("private_ip") val privateIp: String = "",
+    // The config also holds env, the init command and files, which can carry secrets, so only the
+    // parts in FlyMachineConfig are decoded.
+    @SerialName("config") private val fullConfig: FlyMachineConfig? = null,
+    // What Fly.io pieces together when the machine's host can't be reached.
+    @SerialName("incomplete_config") private val incompleteConfig: FlyMachineConfig? = null,
     @SerialName("checks") private val allChecks: List<FlyCheck> = emptyList(),
+    /** The latest first. */
     val events: List<FlyMachineEvent> = emptyList(),
 ) {
+    /** The machine's config, or the partial one when its host is unreachable, as fly-go's GetConfig gives it. */
+    val config: FlyMachineConfig? get() = fullConfig ?: incompleteConfig
+
     /** Health checks, without the internal `bg_deployments_compat` ones flyctl hides. */
     val checks: List<FlyCheck> get() = allChecks.filterNot { it.name.startsWith("bg_deployments_compat") }
 
@@ -104,9 +125,23 @@ class FlyImageRef(
     val repository: String = "",
     val tag: String = "",
     val digest: String = "",
+    // Only fly.version is read; the others are whatever the image was built with.
+    private val labels: JsonObject? = null,
 ) {
     /** `repository:tag`, the short form flyctl prints. */
     val short: String get() = if (tag.isEmpty()) repository else "$repository:$tag"
+
+    /** The image's `fly.version` label, which `fly machine status` prints beside it. */
+    val version: String? get() = (labels?.get("fly.version") as? JsonPrimitive)?.content?.ifEmpty { null }
+
+    /** `registry/repository:tag@digest`, as fly-go's FullImageRef writes it. */
+    val full: String
+        get() =
+            buildString {
+                append(if (registry.isEmpty()) repository else "$registry/$repository")
+                if (tag.isNotEmpty()) append(":$tag")
+                if (digest.isNotEmpty()) append("@$digest")
+            }
 }
 
 @Serializable
@@ -114,6 +149,7 @@ class FlyMachineConfig(
     val guest: FlyGuest? = null,
     val metadata: JsonObject? = null,
     val mounts: List<FlyMount>? = null,
+    val services: List<FlyService>? = null,
 )
 
 @Serializable
@@ -133,7 +169,45 @@ class FlyMount(
     val volume: String = "",
     val path: String = "",
     val name: String = "",
+    @SerialName("size_gb") val sizeGb: Int = 0,
 )
+
+/** A service Fly Proxy routes to the machine: [ports] outside to [internalPort] inside. */
+@Serializable
+class FlyService(
+    /** `tcp` or `udp`. */
+    val protocol: String = "tcp",
+    @SerialName("internal_port") val internalPort: Int = 0,
+    val ports: List<FlyPort> = emptyList(),
+    // A string now, but older machines answer true or false.
+    @SerialName("autostop") private val autostopValue: JsonPrimitive? = null,
+    val autostart: Boolean? = null,
+    @SerialName("min_machines_running") val minMachinesRunning: Int? = null,
+) {
+    /** `off`, `stop` or `suspend`, from either form; null when not set. */
+    val autostop: String?
+        get() =
+            autostopValue?.let {
+                when (it.booleanOrNull) {
+                    true -> "stop"
+                    false -> "off"
+                    null -> it.content
+                }
+            }
+}
+
+@Serializable
+class FlyPort(
+    val port: Int? = null,
+    @SerialName("start_port") val startPort: Int? = null,
+    @SerialName("end_port") val endPort: Int? = null,
+    /** `http`, `tls`, `pg_tls`, `proxy_proto` and so on, applied in order. */
+    val handlers: List<String> = emptyList(),
+    @SerialName("force_https") val forceHttps: Boolean = false,
+) {
+    /** `443`, or `8000-8010` for a range. */
+    val label: String get() = port?.toString() ?: "${startPort ?: ""}-${endPort ?: ""}"
+}
 
 @Serializable
 class FlyCheck(
