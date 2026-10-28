@@ -488,21 +488,27 @@ private class FlyDemo(
             when {
                 "fly_instance_info" in query -> {
                     apps.flatMap { app ->
-                        app.machines
-                            .filter { it.state == "started" }
-                            .groupBy { listOf(it.region, it.cpuKind, it.cpus.toString(), it.memoryMb.toString()) }
-                            .map { (key, group) ->
-                                sample(
-                                    mapOf(
-                                        "app" to app.name,
-                                        "region" to key[0],
-                                        "cpu_kind" to key[1],
-                                        "cpu_count" to key[2],
-                                        "memory_mb" to key[3],
-                                    ),
-                                    group.size * window / 60.0,
-                                )
-                            }
+                        app.machines.filter { it.state == "started" }.map { m ->
+                            sample(
+                                mapOf(
+                                    "app" to app.name,
+                                    "region" to m.region,
+                                    "instance" to m.id,
+                                    "cpu_kind" to m.cpuKind,
+                                    "cpu_count" to m.cpus.toString(),
+                                    "memory_mb" to m.memoryMb.toString(),
+                                ),
+                                window / 60.0,
+                            )
+                        }
+                    }
+                }
+
+                "fly_instance_cpu" in query -> {
+                    apps.flatMap { app ->
+                        app.machines.filter { it.state == "started" }.map { m ->
+                            sample(mapOf("app" to app.name, "instance" to m.id), m.cpus * window.toDouble())
+                        }
                     }
                 }
 
