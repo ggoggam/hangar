@@ -181,7 +181,28 @@ class FlyVolume(
     // Not in Fly.io's API docs, but the API returns them; null when it doesn't.
     @SerialName("bytes_used") val bytesUsed: Long? = null,
     @SerialName("bytes_total") val bytesTotal: Long? = null,
-)
+) {
+    /** How much of it is used, from 0 to 1, or null when the API doesn't say. */
+    val usedFraction: Double?
+        get() =
+            if (bytesUsed != null && bytesTotal != null && bytesTotal > 0) {
+                (bytesUsed.toDouble() / bytesTotal).coerceIn(0.0, 1.0)
+            } else {
+                null
+            }
+
+    /** Used past [NEARLY_FULL], which Overview warns of and the background checks notify. */
+    val nearlyFull: Boolean get() = (usedFraction ?: 0.0) >= NEARLY_FULL
+
+    companion object {
+        /**
+         * 90%: on the 1 GB volume `fly launch` makes, that's about 100 MB left, a few days' room
+         * for a growing database or log, and time to `fly volumes extend` it before writes fail.
+         * Lower would nag about volumes sized to sit fairly full.
+         */
+        const val NEARLY_FULL = 0.9
+    }
+}
 
 @Serializable
 class FlyIp(

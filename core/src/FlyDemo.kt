@@ -799,7 +799,8 @@ private val APPS =
             org = PERSONAL,
             releases = 14,
             machines = listOf(DemoMachine("6e82d4f1c03e98", "quiet-water-4021", "nrt")),
-            volumes = listOf(DemoVolume("vol_r63w8m1oq0ze7p4v", "blog_data", 1, "nrt", "6e82d4f1c03e98", 0.18)),
+            // Nearly full, so Overview's warning shows in the demo.
+            volumes = listOf(DemoVolume("vol_r63w8m1oq0ze7p4v", "blog_data", 1, "nrt", "6e82d4f1c03e98", 0.93)),
             hostnames = listOf("blog.example.com"),
             cpuPercent = 3.0,
             memoryShare = 0.42,

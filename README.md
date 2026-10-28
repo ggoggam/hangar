@@ -104,7 +104,7 @@ the ones flyctl and fly-go make:
 
 | Tab | Source |
 |---|---|
-| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`. Host issues under the app's machines, when there are any, come from GraphQL `app.hostIssues` (fly-go's `GetAppHostIssues`, behind `fly incidents hosts list`). Restart app does what `fly apps restart` does: it leases the running machines and restarts them one after another, each started and passing its checks before the next, or all at once if you choose. Postgres apps (`app_role` `postgres_cluster` at `/v1/apps/{app}`) are left to `fly pg restart`, as flyctl leaves them. |
+| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`; each volume shows how much of it is used, from the `bytes_used` and `bytes_total` the API returns, and one 90% full or more gets a warning at the top. Host issues under the app's machines, when there are any, come from GraphQL `app.hostIssues` (fly-go's `GetAppHostIssues`, behind `fly incidents hosts list`). Restart app does what `fly apps restart` does: it leases the running machines and restarts them one after another, each started and passing its checks before the next, or all at once if you choose. Postgres apps (`app_role` `postgres_cluster` at `/v1/apps/{app}`) are left to `fly pg restart`, as flyctl leaves them. |
 | Metrics | Fly.io's managed Prometheus: `api.fly.io/prometheus/{org}/api/v1/query_range` over 1, 6 or 24 hours, for CPU, memory, edge requests and errors per minute, and p95 latency. flyctl has no metrics command; these follow Fly.io's Grafana boards. "Open in Grafana" opens the app's board on fly-metrics.net in the browser, the page `fly dashboard metrics --grafana` opens. |
 | Machines | `api.machines.dev/v1/apps/{app}/machines`, filtered the way `fly status` filters it: no destroyed, release-command or console machines, and no `bg_deployments_compat` checks. Each machine's config `env` is never decoded. Start, stop, suspend and restart go through `/v1/apps/{app}/machines/{id}/start`, `/stop`, `/suspend` and `/restart`, each under the machine's lease as flyctl takes one (`POST …/lease`, the action with the `fly-machine-lease-nonce` header, `DELETE …/lease`). A restart waits on `…/wait?state=started` and then for the machine's checks to pass, as `fly machine restart` does. Stopping, suspending and restarting ask first. |
 | Releases | GraphQL `releasesUnprocessed` (fly-go's `GetAppReleasesMachines`), the last 25. |
@@ -152,6 +152,7 @@ through APNs, that's as often as iOS lets an app look. The Settings switch says 
 | Machine crashed or ran out of memory | An `exit` event since the last check with a non-zero exit code or `oom_killed`, leaving out the stops someone asked for (`requested_stop`: autostop, deploys, `fly machine stop`). |
 | Health checks failing | A started machine's checks critical at two checks running, since they fail for a moment while a machine starts or deploys. |
 | Deploy finished, failed or interrupted | Each app's latest release, whatever its state, from the app list's GraphQL query (`currentReleaseUnprocessed`, so no extra calls): one that turned `complete`, `failed` or `interrupted` since the last check, or that was still `pending` or `running` at it, which catches a long deploy and a phone clock ahead of Fly.io's. Undeployed apps too, for a first deploy that failed. |
+| Volume nearly full | A running app's volume 90% full or more, by `bytes_used` and `bytes_total` from `api.machines.dev/v1/apps/{app}/volumes` (`fly volumes list`). Notified once each time it gets there: it counts as cleared under 85%, so one hovering at the line doesn't notify again on every check. One more call per app, made only while its switch is on. |
 | Billing problem | An organization's GraphQL `billingStatus` turning `PAST_DUE`, `DELINQUENT`, `SUSPENDED`, `SOURCE_REQUIRED` or `TRIAL_ENDED`, as flyctl's `GetOrganization` reads it and `fly launch` checks it. One call per organization. |
 | Over the spend alert | An organization on pace to spend more than the amount set in Settings over 30 days, at its last 2 days' rate, from the same estimate as the app list (`FlyUsage`). Off until an amount is set, and estimated at most every 6 hours, since it's a few Prometheus queries per organization. |
 | Signed out | Fly.io turned the login down, so the checks have stopped. |
@@ -160,11 +161,11 @@ The first check only takes note of what's already wrong, so turning the checks o
 burst of notifications for problems the app list shows anyway. After that each problem is
 notified once, and again only if it clears and comes back. An app or feed that can't be reached
 keeps what was known about it, so a network failure never reads as a problem resolved. Apps are
-checked four at a time, two calls each. The demo is never checked.
+checked four at a time, two calls each, or three with volumes. The demo is never checked.
 
 Tapping a notification opens what it's about: an app's Machines tab for its machines, its Overview
-for a host issue and its Releases for a deploy, or the app list, with Fly.io's incidents and the
-usage estimate, for the rest. The link travels in the notification itself (an intent extra on
+for a host issue or a nearly full volume and its Releases for a deploy, or the app list, with
+Fly.io's incidents and the usage estimate, for the rest. The link travels in the notification itself (an intent extra on
 Android, `userInfo` on iOS) and holds only the app's and organization's names, as the
 notification's text already does.
 
@@ -205,7 +206,7 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
-  notified, never an app's, machine's or organization's name. Your email, apps, logs, metrics and secrets' names are held in
+  notified, never an app's, machine's, volume's or organization's name. Your email, apps, logs, metrics and secrets' names are held in
   memory while they're on screen: the app never writes them to disk, logs them or sends them
   anywhere. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients

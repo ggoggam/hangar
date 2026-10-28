@@ -93,6 +93,7 @@ enum class NotificationChannel(
     Apps("apps"),
     Billing("billing"),
     Deploys("deploys"),
+    Volumes("volumes"),
     Account("account"),
 }
 

@@ -28,6 +28,11 @@ class FlyWatchTest {
         val machinesStatus = mutableMapOf<String, HttpStatusCode>()
         val hostIssues = mutableMapOf<String, String>()
 
+        /** Each app's volumes, as JSON, and how often they were asked for. */
+        val volumes = mutableMapOf<String, String>()
+        var volumesStatus = HttpStatusCode.OK
+        var volumeCalls = 0
+
         /** Each app's latest release, as JSON. */
         val releases = mutableMapOf<String, String>()
         val undeployed = mutableSetOf<String>()
@@ -66,7 +71,9 @@ class FlyWatchTest {
                             }
 
                             path.endsWith("/volumes") -> {
-                                HttpStatusCode.OK to "[]"
+                                volumeCalls++
+                                val app = path.removePrefix("/v1/apps/").substringBefore('/')
+                                volumesStatus to (volumes[app] ?: "[]")
                             }
 
                             path.startsWith("/v1/apps/") -> {
@@ -139,6 +146,17 @@ class FlyWatchTest {
         updatedAt: Long,
     ) = """{"version":$version,"status":"$status","createdAt":"${Instant.fromEpochSeconds(updatedAt - 120)}",
         "updatedAt":"${Instant.fromEpochSeconds(updatedAt)}","user":{"email":"a@b.c"}}"""
+
+    /** `web`'s one volume, 1 GB with [percent] of it used; no usage figures for null. */
+    private fun volume(percent: Int?) =
+        if (percent == null) {
+            """[{"id":"vol_x1","name":"web_data","state":"created","size_gb":1,"region":"nrt"}]"""
+        } else {
+            """[{"id":"vol_x1","name":"web_data","state":"created","size_gb":1,"region":"nrt",
+                "bytes_used":${percent * 10_000_000L},"bytes_total":1000000000}]"""
+        }
+
+    private val volumes = FlyWatchOptions(volumes = true)
 
     private val critical = """[{"name":"servicecheck-00-http-8080","status":"critical"}]"""
 
@@ -364,11 +382,14 @@ class FlyWatchTest {
             world.apps = listOf("secret-app")
             world.machines["secret-app"] = machine(state = "failed")
             world.hostIssues["secret-app"] = """[{"internalId":"h1","message":"Host is down"}]"""
-            val encoded = watch(world).check(null, now).state.encode()
+            world.volumes["secret-app"] = volume(95)
+            val encoded = watch(world).check(null, now, volumes).state.encode()
 
             assertFalse("secret-app" in encoded)
             assertFalse("m1" in encoded)
             assertFalse("h1" in encoded)
+            assertFalse("vol_x1" in encoded)
+            assertFalse("web_data" in encoded)
             assertEquals(1, FlyWatchState.decode(encoded)!!.apps.size)
         }
 
@@ -459,6 +480,87 @@ class FlyWatchTest {
             assertIs<FlyAlert.OverBudget>(
                 watch.check(later.state, now + 12 * 3600, FlyWatchOptions(monthlyBudgetUsd = 1.0)).alerts.single(),
             )
+        }
+
+    @Test
+    fun aVolumeNearlyFullIsReportedOnceEachTimeItGetsThere() =
+        runTest {
+            val world = World()
+            world.volumes["web"] = volume(50)
+            val watch = watch(world)
+            val first = watch.check(null, now, volumes)
+
+            world.volumes["web"] = volume(92)
+            val full = watch.check(first.state, now + 900, volumes)
+            val alert = assertIs<FlyAlert.VolumeNearlyFull>(full.alerts.single())
+            assertEquals("web", alert.app)
+            assertEquals("personal", alert.org)
+            assertEquals("web_data", alert.volume.name)
+            assertEquals("volume:web:vol_x1", alert.key)
+
+            // Fuller still, or a little under the line and back, is the same time.
+            world.volumes["web"] = volume(97)
+            val fuller = watch.check(full.state, now + 1800, volumes)
+            assertEquals(emptyList(), fuller.alerts)
+            world.volumes["web"] = volume(88)
+            val hovering = watch.check(fuller.state, now + 2700, volumes)
+            assertEquals(emptyList(), hovering.alerts)
+            world.volumes["web"] = volume(91)
+            val back = watch.check(hovering.state, now + 3600, volumes)
+            assertEquals(emptyList(), back.alerts)
+
+            // Cleared under 85%, then full again: news.
+            world.volumes["web"] = volume(70)
+            val cleared = watch.check(back.state, now + 4500, volumes)
+            assertEquals(emptyList(), cleared.alerts)
+            world.volumes["web"] = volume(90)
+            assertIs<FlyAlert.VolumeNearlyFull>(watch.check(cleared.state, now + 5400, volumes).alerts.single())
+        }
+
+    @Test
+    fun volumesAreLookedAtOnlyWhenAskedFor() =
+        runTest {
+            val world = World()
+            world.volumes["web"] = volume(95)
+            val watch = watch(world)
+            // Full already at the first look: only taken note of.
+            val first = watch.check(null, now, volumes)
+            assertEquals(emptyList(), first.alerts)
+            assertEquals(1, world.volumeCalls)
+
+            // Not asked for: no calls, nothing to say, and nothing forgotten.
+            val unasked = watch.check(first.state, now + 900)
+            assertEquals(emptyList(), unasked.alerts)
+            assertEquals(1, world.volumeCalls)
+            assertEquals(emptyList(), watch.check(unasked.state, now + 1800, volumes).alerts)
+        }
+
+    @Test
+    fun aVolumeThatCantBeReadKeepsItsMarks() =
+        runTest {
+            val world = World()
+            world.volumes["web"] = volume(50)
+            world.machines["web"] = machine()
+            val watch = watch(world)
+            val first = watch.check(null, now, volumes)
+            world.volumes["web"] = volume(95)
+            val full = watch.check(first.state, now + 900, volumes)
+            assertIs<FlyAlert.VolumeNearlyFull>(full.alerts.single())
+
+            // The volumes don't answer, but the machines still do.
+            world.volumesStatus = HttpStatusCode.ServiceUnavailable
+            world.machines["web"] = machine(state = "failed")
+            val down = watch.check(full.state, now + 1800, volumes)
+            assertIs<FlyAlert.MachineFailed>(down.alerts.single())
+            world.volumesStatus = HttpStatusCode.OK
+
+            // Nor does a volume that leaves out how full it is forget it.
+            world.volumes["web"] = volume(null)
+            val unknown = watch.check(down.state, now + 2700, volumes)
+            assertEquals(emptyList(), unknown.alerts)
+
+            world.volumes["web"] = volume(95)
+            assertEquals(emptyList(), watch.check(unknown.state, now + 3600, volumes).alerts)
         }
 
     @Test

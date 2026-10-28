@@ -55,6 +55,8 @@
     <string name="volumes_title">볼륨</string>
     <string name="volume_detail">%1$s · %2$d GB · %3$s</string>
     <string name="volume_unattached">연결 안 됨</string>
+    <string name="volume_nearly_full">볼륨 공간 부족</string>
+    <string name="volume_nearly_full_body">%2$s의 %1$s 볼륨이 %3$s 찼어요(%5$s 중 %4$s). 가득 차면 쓰기가 실패하니 fly volumes extend로 늘리거나 공간을 비워 주세요.</string>
     <string name="ips_title">IP 주소</string>
     <string name="ip_v4">IPv4</string>
     <string name="ip_v6">IPv6</string>
@@ -204,6 +206,8 @@
     <string name="settings_notify_apps_detail">실패·비정상 종료된 머신, 헬스 체크 실패, 호스트 문제</string>
     <string name="settings_notify_deploys">배포</string>
     <string name="settings_notify_deploys_detail">배포가 끝나거나 실패하거나 중단됐을 때</string>
+    <string name="settings_notify_volumes">볼륨</string>
+    <string name="settings_notify_volumes_detail">볼륨이 %1$s 이상 찼을 때</string>
     <string name="settings_notify_billing">결제</string>
     <string name="settings_notify_billing_detail">결제 연체·실패, 지출 알림 금액 초과</string>
     <string name="settings_spend_alert">지출 알림</string>
@@ -229,6 +233,7 @@
     <string name="channel_incidents">Fly.io 장애</string>
     <string name="channel_apps">앱 문제</string>
     <string name="channel_deploys">배포</string>
+    <string name="channel_volumes">볼륨 공간 부족</string>
     <string name="channel_account">계정</string>
     <string name="notify_incident_title">Fly.io 장애: %1$s</string>
     <string name="notify_incident_body">Fly.io에서 조사하고 있어요.</string>
@@ -249,6 +254,8 @@
     <string name="notify_deploy_by">%1$s 님이 배포했어요</string>
     <string name="notify_deploy_failed_body">%1$s 님이 시작했어요. 일부 머신은 아직 이전 릴리스일 수 있어요.</string>
     <string name="notify_deploy_failed_body_anonymous">일부 머신은 아직 이전 릴리스일 수 있어요.</string>
+    <string name="notify_volume_title">%1$s: 볼륨 공간 부족</string>
+    <string name="notify_volume_body">%1$s 볼륨이 %2$s 찼어요(%4$s 중 %3$s). fly volumes extend로 늘리거나 공간을 비워 주세요.</string>
     <string name="notify_signed_out_title">Hangar에서 로그아웃됐어요</string>
     <string name="notify_signed_out_body">Fly.io가 이 로그인을 더 이상 받지 않아 백그라운드 확인이 멈췄어요. Hangar를 열어 다시 로그인해 주세요.</string>
 </resources>

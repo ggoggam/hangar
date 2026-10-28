@@ -43,6 +43,9 @@ fun bytes(value: Double): String {
     return "${decimal(v, if (v >= 100 || unit == 0) 0 else 1)} ${units[unit]}"
 }
 
+/** A fraction from 0 to 1 as a whole percentage, rounded down so `89%` is never past a 90% line. */
+fun percent(fraction: Double): String = "${(fraction * 100).toInt()}%"
+
 /** Milliseconds as `85 ms` or `1.2 s`. */
 fun millis(value: Double): String = if (value < 1000) "${decimal(value, 0)} ms" else "${decimal(value / 1000, 1)} s"
 

@@ -15,8 +15,9 @@ import kotlin.time.Instant
  * The background check behind notifications: what has gone wrong since the last look. It reads what
  * the screens read: Fly.io's incidents (`fly incidents list`), each app's latest release from the app
  * list, and for each deployed app its machines (`fly status`) and host issues (`fly incidents hosts
- * list`); if asked, each organization's billing status and projected spend too. It compares them with
- * [FlyWatchState], which keeps only fingerprints, so no app or machine name is written to disk.
+ * list`); if asked, each app's volumes (`fly volumes list`), and each organization's billing status
+ * and projected spend. It compares them with [FlyWatchState], which keeps only fingerprints, so no
+ * app or machine name is written to disk.
  *
  * The first look, with no state, only takes note of what's wrong already: those problems are on
  * screen when the user opens the app, and a burst of notifications for them would say nothing new.
@@ -32,8 +33,8 @@ class FlyWatch(
      * What's new since [previous], and the state to keep for next time. An app or feed that can't
      * be reached keeps its old state, so a network failure never reads as a problem resolved. Throws
      * [FlyApiException.Unauthorized] when the session is over. [previous] from another account is
-     * ignored, so that account's first look only takes note too. [options] adds billing, which
-     * costs calls for each organization, so it's only looked at when asked for.
+     * ignored, so that account's first look only takes note too. [options] adds volumes and
+     * billing, which cost calls for each app or organization, so they're only looked at when asked for.
      */
     suspend fun check(
         previous: FlyWatchState?,
@@ -59,7 +60,7 @@ class FlyWatch(
                     .map { app ->
                         async {
                             gate.withPermit {
-                                app.name to runCatchingFly { look(app.name) }
+                                app.name to runCatchingFly { look(app.name, options.volumes) }
                             }
                         }
                     }.awaitAll()
@@ -97,6 +98,23 @@ class FlyWatch(
                 val sinceMillis = (before?.checkedAt ?: previous?.checkedAt ?: nowSeconds) * 1000
                 val problems = look?.let { problems(app, it, sinceMillis) }.orEmpty() + deploy(app, before, sinceMillis)
                 appMarks[key] = track(before, problems, baseline, nowSeconds, alerts)
+            }
+
+            // Volumes, kept from the last look while they aren't asked for, or for an app whose can't be read.
+            val volumeMarks = previous?.volumes.orEmpty().toMutableMap()
+            if (options.volumes) {
+                volumeMarks.clear()
+                for (app in apps) {
+                    val key = fingerprint(app.name)
+                    val before = previous?.volumes?.get(key)
+                    val volumes = looks[app.name]?.volumes
+                    if (volumes == null) {
+                        before?.let { volumeMarks[key] = it }
+                        continue
+                    }
+                    val problems = volumes.mapNotNull { nearlyFull(app, it, before) }
+                    volumeMarks[key] = track(before, problems, baseline, nowSeconds, alerts)
+                }
             }
 
             // Billing, kept from the last look while it isn't asked for or can't be reached.
@@ -147,6 +165,7 @@ class FlyWatch(
                     orgMarks,
                     spendMarks,
                     spendCheckedAt = if (spent != null) nowSeconds else previous?.spendCheckedAt,
+                    volumes = volumeMarks,
                 ),
             )
         }
@@ -234,12 +253,38 @@ class FlyWatch(
                 }.awaitAll()
         }
 
-    private suspend fun look(app: String): Look =
+    /** [app]'s machines and host issues, and if asked for its [volumes] (`fly volumes list`). */
+    private suspend fun look(
+        app: String,
+        volumes: Boolean,
+    ): Look =
         coroutineScope {
             val machines = async { session.authorized { FlyMachines(http, it, machinesUrl).machines(app) } }
             val hostIssues = async { session.authorized { FlyApi(http, it, apiUrl).hostIssues(app) } }
-            Look(machines.await(), hostIssues.await())
+            // Volumes that can't be read leave the machines' look be, and keep what was known of them.
+            val volumeList =
+                async {
+                    if (volumes) runCatchingFly { session.authorized { FlyMachines(http, it, machinesUrl).volumes(app) } } else null
+                }
+            Look(machines.await(), hostIssues.await(), volumeList.await())
         }
+
+    /**
+     * [volume] as a problem if it's nearly full. Once it is, it stays so until it's back under
+     * [VOLUME_CLEAR], so one hovering at the line isn't notified again on every look; and while
+     * Fly.io doesn't say how full it is, it stays as it was.
+     */
+    private fun nearlyFull(
+        app: FlyApp,
+        volume: FlyVolume,
+        before: FlyWatchState.Marks?,
+    ): Problem? {
+        val mark = fingerprint(app.name, "volume", volume.id)
+        val was = mark in before?.seen.orEmpty()
+        val used = volume.usedFraction
+        val full = if (used == null) was else volume.nearlyFull || (was && used >= VOLUME_CLEAR)
+        return Problem(mark, FlyAlert.VolumeNearlyFull(app.name, app.organization.slug, volume)).takeIf { full }
+    }
 
     private fun problems(
         flyApp: FlyApp,
@@ -310,6 +355,8 @@ class FlyWatch(
     private class Look(
         val machines: List<FlyMachine>,
         val hostIssues: List<FlyHostIssue>,
+        /** Null when not asked for or not read. */
+        val volumes: List<FlyVolume>?,
     )
 
     /** Something seen, under its [mark]; with no [alert], only noted for the next look. */
@@ -319,8 +366,11 @@ class FlyWatch(
     )
 
     private companion object {
-        /** Apps looked at once: each look is two calls, and Fly.io rate-limits the Machines API. */
+        /** Apps looked at once: each look is two calls, three with volumes, and Fly.io rate-limits the Machines API. */
         const val PARALLEL_APPS = 4
+
+        /** Where a nearly full volume counts as cleared, a little under [FlyVolume.NEARLY_FULL]. */
+        const val VOLUME_CLEAR = 0.85
 
         /** Spend moves slowly and costs a few Prometheus queries an organization, so four times a day. */
         const val SPEND_EVERY_SECONDS = 6 * 3_600L
@@ -372,10 +422,12 @@ class FlyWatchOptions(
     val billing: Boolean = false,
     /** Notify when an organization's projected spend this month passes this; null for never. */
     val monthlyBudgetUsd: Double? = null,
+    /** Running apps' volumes, for the ones nearly full: a call for each app. */
+    val volumes: Boolean = false,
 )
 
 class FlyWatchResult(
-    /** Incidents, then apps in the order Fly.io lists them, then billing. */
+    /** Incidents, then apps in the order Fly.io lists them, then their volumes, then billing. */
     val alerts: List<FlyAlert>,
     val state: FlyWatchState,
 )
@@ -459,6 +511,16 @@ sealed class FlyAlert {
         override val key get() = "deploy:$app"
     }
 
+    /** A [volume] of [app]'s that's [FlyVolume.nearlyFull], notified once each time it gets there. */
+    class VolumeNearlyFull(
+        override val app: String,
+        override val org: String,
+        val volume: FlyVolume,
+    ) : FlyAlert(),
+        OfApp {
+        override val key get() = "volume:$app:${volume.id}"
+    }
+
     /** An organization whose billing [status] is one of the problems, such as `PAST_DUE`. */
     class BillingProblem(
         val slug: String,
@@ -496,6 +558,8 @@ class FlyWatchState(
     val spend: Map<String, Marks> = emptyMap(),
     /** When spend was last estimated, which is less often than every look. */
     val spendCheckedAt: Long? = null,
+    /** Apps' volumes nearly full. */
+    val volumes: Map<String, Marks> = emptyMap(),
 ) {
     @Serializable
     class Marks(

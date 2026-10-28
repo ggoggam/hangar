@@ -43,6 +43,7 @@ import dev.ggoggam.hangar.app.ui.ago
 import dev.ggoggam.hangar.app.ui.bytes
 import dev.ggoggam.hangar.app.ui.decimal
 import dev.ggoggam.hangar.app.ui.millis
+import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.core.FlyAppDetail
 import dev.ggoggam.hangar.core.FlyAppMetrics
 import dev.ggoggam.hangar.core.FlyCertificate
@@ -62,6 +63,9 @@ internal fun LazyListScope.overview(
 ) {
     // Only when there are some: a quiet app shouldn't carry an empty warning, or a failed one.
     state.hostIssues.value?.let { issues -> items(issues, key = { "host:${it.internalId}" }) { HostIssueCard(it) } }
+    state.volumes.value
+        ?.filter { it.nearlyFull }
+        ?.let { full -> items(full, key = { "volume-full:${it.id}" }) { VolumeFullCard(it) } }
     section(state.app, "app") { app ->
         item(key = "app") { AppCard(app, state.machines.value) }
         state.machines.value?.let { machines ->
@@ -135,6 +139,28 @@ private fun HostIssueCard(issue: FlyHostIssue) {
             stringResource(Res.string.host_issue_updated, ago(issue.updatedAt ?: issue.createdAt)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** A volume past [FlyVolume.NEARLY_FULL], which a write will fail on once it's full. */
+@Composable
+private fun VolumeFullCard(volume: FlyVolume) {
+    Panel {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Lucide.TriangleAlert, contentDescription = null, tint = LocalStatusColors.current.error, modifier = Modifier.size(18.dp))
+            StatusBadge(stringResource(Res.string.volume_nearly_full), Tone.Error)
+        }
+        Text(
+            stringResource(
+                Res.string.volume_nearly_full_body,
+                volume.name,
+                volume.region,
+                percent(volume.usedFraction ?: 0.0),
+                bytes((volume.bytesUsed ?: 0).toDouble()),
+                bytes((volume.bytesTotal ?: 0).toDouble()),
+            ),
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -332,9 +358,17 @@ private fun VolumeRow(volume: FlyVolume) {
         )
         val used = volume.bytesUsed
         val total = volume.bytesTotal
-        if (used != null && total != null && total > 0) {
-            val fraction = (used.toFloat() / total).coerceIn(0f, 1f)
+        val usedFraction = volume.usedFraction
+        if (used != null && total != null && usedFraction != null) {
+            val fraction = usedFraction.toFloat()
             val colors = LocalStatusColors.current
+            // Red from where the background checks notify, amber a while before.
+            val tone =
+                when {
+                    volume.nearlyFull -> colors.error
+                    usedFraction >= VOLUME_FILLING -> colors.warning
+                    else -> null
+                }
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -346,27 +380,28 @@ private fun VolumeRow(volume: FlyVolume) {
                     Modifier
                         .fillMaxWidth(fraction)
                         .height(6.dp)
-                        .background(
-                            if (fraction >
-                                0.9f
-                            ) {
-                                colors.error
-                            } else if (fraction > 0.75f) {
-                                colors.warning
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                        ),
+                        .background(tone ?: MaterialTheme.colorScheme.primary),
                 )
             }
-            Text(
-                "${bytes(used.toDouble())} / ${bytes(total.toDouble())}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${bytes(used.toDouble())} / ${bytes(total.toDouble())}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    percent(usedFraction),
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = tone ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
+
+/** Where a volume's bar turns amber, on its way to [FlyVolume.NEARLY_FULL]. */
+private const val VOLUME_FILLING = 0.75
 
 @Composable
 private fun IpRow(ip: FlyIp) {
