@@ -28,6 +28,11 @@ class WatchSettings(
     /** Failed and crashing machines, failing health checks and host issues. */
     val apps: StateFlow<Boolean> = _apps.asStateFlow()
 
+    private val _deploys = MutableStateFlow(store.read(KEY_DEPLOYS)?.toBooleanStrictOrNull() ?: true)
+
+    /** Deploys that finished, failed or were interrupted. */
+    val deploys: StateFlow<Boolean> = _deploys.asStateFlow()
+
     private val _billing = MutableStateFlow(store.read(KEY_BILLING)?.toBooleanStrictOrNull() ?: true)
 
     /** Organizations' billing problems, and spend over [budget]. */
@@ -43,6 +48,8 @@ class WatchSettings(
     fun setIncidents(on: Boolean) = set(KEY_INCIDENTS, _incidents, on)
 
     fun setApps(on: Boolean) = set(KEY_APPS, _apps, on)
+
+    fun setDeploys(on: Boolean) = set(KEY_DEPLOYS, _deploys, on)
 
     fun setBilling(on: Boolean) = set(KEY_BILLING, _billing, on)
 
@@ -70,6 +77,7 @@ class WatchSettings(
         const val KEY_ENABLED = "watch.enabled"
         const val KEY_INCIDENTS = "watch.incidents"
         const val KEY_APPS = "watch.apps"
+        const val KEY_DEPLOYS = "watch.deploys"
         const val KEY_BILLING = "watch.billing"
         const val KEY_BUDGET = "watch.budget"
         const val KEY_STATE = "watch.state"

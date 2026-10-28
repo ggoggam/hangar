@@ -9,6 +9,7 @@ import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentFeed
 import dev.ggoggam.hangar.app.storage.StorageViewModel
+import dev.ggoggam.hangar.app.watch.NotificationLinks
 import dev.ggoggam.hangar.app.watch.WatchSettings
 import dev.ggoggam.hangar.app.watch.Watcher
 import dev.ggoggam.hangar.core.FlyDischarges
@@ -50,6 +51,7 @@ private val appModule =
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
         single { WatchSettings(get()) }
+        single { NotificationLinks() }
         // Always the live client: the demo is never checked in the background.
         single { Watcher(get(LIVE_HTTP), get(), get(), get()) }
         // Fetches through the screens' client as each load starts, so the demo's never reaches the network.

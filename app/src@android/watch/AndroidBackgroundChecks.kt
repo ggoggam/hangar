@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import dev.ggoggam.hangar.app.generated.resources.settings_checks_detail
 import org.jetbrains.compose.resources.StringResource
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import org.koin.mp.KoinPlatform
 import java.util.concurrent.TimeUnit
 import android.app.NotificationChannel as SystemChannel
 
@@ -70,7 +72,7 @@ class WatchWorker(
     }
 }
 
-/** Notifications that open the app when tapped, with [icon] in the status bar. */
+/** Notifications that open the app at their link when tapped, with [icon] in the status bar. */
 class AndroidNotifier(
     private val context: Context,
     private val icon: Int,
@@ -82,9 +84,16 @@ class AndroidNotifier(
             SystemChannel(notification.channel.id, notification.channelName, NotificationManager.IMPORTANCE_DEFAULT),
         )
         if (!manager.areNotificationsEnabled()) return
+        // Each key its own request code, so one notification's link doesn't replace another's.
         val open =
             context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
-                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
+                notification.link?.let { link -> it.putExtra(EXTRA_LINK, link.encode()) }
+                PendingIntent.getActivity(
+                    context,
+                    notification.key.hashCode(),
+                    it,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
             }
         val built =
             Notification
@@ -99,6 +108,18 @@ class AndroidNotifier(
         // Tagged with the key, so the same problem's notification replaces the last one.
         manager.notify(notification.key, 0, built)
     }
+}
+
+private const val EXTRA_LINK = "dev.ggoggam.hangar.link"
+
+/**
+ * Hands the link of the notification that started or resumed the activity with [intent] to the app.
+ * One relaunched from Recents carries the old notification's extras too, so it's ignored.
+ */
+fun openNotificationLink(intent: Intent?) {
+    if (intent == null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+    KoinPlatform.getKoin().get<NotificationLinks>().open(intent.getStringExtra(EXTRA_LINK))
+    intent.removeExtra(EXTRA_LINK)
 }
 
 @Composable

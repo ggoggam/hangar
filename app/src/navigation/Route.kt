@@ -25,10 +25,14 @@ sealed interface Route {
     @Serializable
     data object Regions : Route
 
-    /** One app's dashboard. [org] is its organization's slug, which its metrics live under. */
+    /**
+     * One app's dashboard. [org] is its organization's slug, which its metrics live under; [tab] is
+     * the [dev.ggoggam.hangar.app.dashboard.DashboardTab] it opens on, by name, for a notification's link.
+     */
     @Serializable
     data class App(
         val name: String,
         val org: String,
+        val tab: String? = null,
     ) : Route
 }

@@ -19,8 +19,11 @@ import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationRequest
+import platform.UserNotifications.UNNotificationResponse
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
+import platform.UserNotifications.UNUserNotificationCenterDelegateProtocol
+import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
@@ -87,7 +90,7 @@ fun registerBackgroundChecks() {
 
 /**
  * Local notifications, grouped by [NotificationChannel] in Notification Center. One with the key of
- * a notification still showing replaces it.
+ * a notification still showing replaces it. Its link rides in `userInfo`, for [NotificationTaps].
  */
 class IosNotifier : Notifier {
     override fun post(notification: HangarNotification) {
@@ -97,10 +100,39 @@ class IosNotifier : Notifier {
                 setBody(notification.body)
                 setThreadIdentifier(notification.channel.id)
                 setSound(UNNotificationSound.defaultSound)
+                notification.link?.let { setUserInfo(mapOf<Any?, Any?>(LINK to it.encode())) }
             }
         val request = UNNotificationRequest.requestWithIdentifier(notification.key, content, trigger = null)
         UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, withCompletionHandler = null)
     }
+}
+
+private const val LINK = "link"
+
+/** Hands a tapped notification's link to the app, which opens it as it starts or comes to the front. */
+private class NotificationTaps :
+    NSObject(),
+    UNUserNotificationCenterDelegateProtocol {
+    override fun userNotificationCenter(
+        center: UNUserNotificationCenter,
+        didReceiveNotificationResponse: UNNotificationResponse,
+        withCompletionHandler: () -> Unit,
+    ) {
+        val link = didReceiveNotificationResponse.notification.request.content.userInfo[LINK] as? String
+        KoinPlatform.getKoin().get<NotificationLinks>().open(link)
+        withCompletionHandler()
+    }
+}
+
+// The notification center holds its delegate weakly.
+private val taps = NotificationTaps()
+
+/**
+ * Listens for notification taps, which iOS wants set up before the app finishes launching, so that
+ * a tap that launches the app is heard too. Call after [dev.ggoggam.hangar.app.di.initHangar].
+ */
+fun listenForNotificationTaps() {
+    UNUserNotificationCenter.currentNotificationCenter().delegate = taps
 }
 
 @Composable

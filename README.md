@@ -150,6 +150,7 @@ through APNs, that's as often as iOS lets an app look. The Settings switch says 
 | Machine failed | A machine in the `failed` state, from `api.machines.dev/v1/apps/{app}/machines` (`fly status`). |
 | Machine crashed or ran out of memory | An `exit` event since the last check with a non-zero exit code or `oom_killed`, leaving out the stops someone asked for (`requested_stop`: autostop, deploys, `fly machine stop`). |
 | Health checks failing | A started machine's checks critical at two checks running, since they fail for a moment while a machine starts or deploys. |
+| Deploy finished, failed or interrupted | Each app's latest release, whatever its state, from the app list's GraphQL query (`currentReleaseUnprocessed`, so no extra calls): one that turned `complete`, `failed` or `interrupted` since the last check, or that was still `pending` or `running` at it, which catches a long deploy and a phone clock ahead of Fly.io's. Undeployed apps too, for a first deploy that failed. |
 | Billing problem | An organization's GraphQL `billingStatus` turning `PAST_DUE`, `DELINQUENT`, `SUSPENDED`, `SOURCE_REQUIRED` or `TRIAL_ENDED`, as flyctl's `GetOrganization` reads it and `fly launch` checks it. One call per organization. |
 | Over the spend alert | An organization on pace to spend more than the amount set in Settings over 30 days, at its last 2 days' rate, from the same estimate as the app list (`FlyUsage`). Off until an amount is set, and estimated at most every 6 hours, since it's a few Prometheus queries per organization. |
 | Signed out | Fly.io turned the login down, so the checks have stopped. |
@@ -159,6 +160,12 @@ burst of notifications for problems the app list shows anyway. After that each p
 notified once, and again only if it clears and comes back. An app or feed that can't be reached
 keeps what was known about it, so a network failure never reads as a problem resolved. Apps are
 checked four at a time, two calls each. The demo is never checked.
+
+Tapping a notification opens what it's about: an app's Machines tab for its machines, its Overview
+for a host issue and its Releases for a deploy, or the app list, with Fly.io's incidents and the
+usage estimate, for the rest. The link travels in the notification itself (an intent extra on
+Android, `userInfo` on iOS) and holds only the app's and organization's names, as the
+notification's text already does.
 
 ## Privacy
 

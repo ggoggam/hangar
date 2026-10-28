@@ -14,6 +14,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class FlyWatchTest {
     private val now = 1_800_000_000L
@@ -26,6 +27,10 @@ class FlyWatchTest {
         val machines = mutableMapOf<String, String>()
         val machinesStatus = mutableMapOf<String, HttpStatusCode>()
         val hostIssues = mutableMapOf<String, String>()
+
+        /** Each app's latest release, as JSON. */
+        val releases = mutableMapOf<String, String>()
+        val undeployed = mutableSetOf<String>()
         var billingStatus = "CURRENT"
         var billingFails = false
 
@@ -74,7 +79,9 @@ class FlyWatchTest {
                                 if ("query Overview" in query) {
                                     val nodes =
                                         apps.joinToString(",") {
-                                            """{"name":"$it","status":"deployed","deployed":true,"organization":{"slug":"personal"}}"""
+                                            val deployed = it !in undeployed
+                                            """{"name":"$it","status":"${if (deployed) "deployed" else "pending"}","deployed":$deployed,
+                                                "organization":{"slug":"personal"},"latestRelease":${releases[it] ?: "null"}}"""
                                         }
                                     HttpStatusCode.OK to
                                         """{"data":{"viewer":{"email":"a@b.c"},"apps":{"pageInfo":{"hasNextPage":false},"nodes":[$nodes]}}}"""
@@ -125,6 +132,13 @@ class FlyWatchTest {
         checks: String = "[]",
         events: String = "[]",
     ) = """[{"id":"m1","name":"bold-fog","state":"$state","region":"nrt","checks":$checks,"events":$events}]"""
+
+    private fun release(
+        version: Int,
+        status: String,
+        updatedAt: Long,
+    ) = """{"version":$version,"status":"$status","createdAt":"${Instant.fromEpochSeconds(updatedAt - 120)}",
+        "updatedAt":"${Instant.fromEpochSeconds(updatedAt)}","user":{"email":"a@b.c"}}"""
 
     private val critical = """[{"name":"servicecheck-00-http-8080","status":"critical"}]"""
 
@@ -259,6 +273,71 @@ class FlyWatchTest {
             val crashed = assertIs<FlyAlert.MachineCrashed>(watch.check(first.state, now + 1800).alerts.single())
             assertTrue(crashed.oomKilled)
             assertEquals(137, crashed.exitCode)
+        }
+
+    @Test
+    fun deploysThatEndAreReportedOnce() =
+        runTest {
+            val world = World()
+            world.releases["web"] = release(1, "complete", now - 86_400)
+            val watch = watch(world)
+            val first = watch.check(null, now)
+
+            world.releases["web"] = release(2, "running", now + 600)
+            val deploying = watch.check(first.state, now + 900)
+            assertEquals(emptyList(), deploying.alerts)
+
+            world.releases["web"] = release(2, "complete", now + 1000)
+            val done = watch.check(deploying.state, now + 1800)
+            val alert = assertIs<FlyAlert.Deploy>(done.alerts.single())
+            assertEquals(2, alert.release.version)
+            assertEquals("complete", alert.release.status)
+            assertEquals("personal", alert.org)
+
+            assertEquals(emptyList(), watch.check(done.state, now + 2700).alerts)
+
+            // A deploy that starts and fails between two looks.
+            world.releases["web"] = release(3, "failed", now + 3000)
+            assertEquals("failed", assertIs<FlyAlert.Deploy>(watch.check(done.state, now + 3600).alerts.single()).release.status)
+        }
+
+    @Test
+    fun aDeploySeenRunningIsReportedWhateverTheClockSays() =
+        runTest {
+            val world = World()
+            world.releases["web"] = release(4, "running", now - 60)
+            val watch = watch(world)
+            val first = watch.check(null, now)
+
+            // Ended, by Fly.io's clock, before the phone's last look.
+            world.releases["web"] = release(4, "complete", now - 30)
+            assertEquals(4, assertIs<FlyAlert.Deploy>(watch.check(first.state, now + 900).alerts.single()).release.version)
+        }
+
+    @Test
+    fun aNewAppsEarlierDeployIsntNews() =
+        runTest {
+            val world = World()
+            val watch = watch(world)
+            val first = watch.check(null, now)
+
+            world.apps = listOf("web", "api")
+            world.releases["api"] = release(9, "complete", now - 3600)
+            assertEquals(emptyList(), watch.check(first.state, now + 900).alerts)
+        }
+
+    @Test
+    fun aFailedFirstDeployIsReported() =
+        runTest {
+            val world = World()
+            world.apps = listOf("web", "new")
+            world.undeployed += "new"
+            val watch = watch(world)
+            val first = watch.check(null, now)
+
+            world.releases["new"] = release(1, "failed", now + 500)
+            val alert = assertIs<FlyAlert.Deploy>(watch.check(first.state, now + 900).alerts.single())
+            assertEquals("new", alert.app)
         }
 
     @Test
