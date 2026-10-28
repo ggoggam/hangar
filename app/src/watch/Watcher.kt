@@ -1,11 +1,13 @@
 package dev.ggoggam.hangar.app.watch
 
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.core.FlyAlert
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyMachine
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyWatch
+import dev.ggoggam.hangar.core.FlyWatchOptions
 import dev.ggoggam.hangar.core.isDemo
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
@@ -33,7 +35,12 @@ class Watcher(
         if (!settings.enabled.value || token == null || token.isDemo) return false
         val result =
             try {
-                FlyWatch(http, session).check(settings.state(), nowSeconds())
+                val billing = settings.billing.value
+                FlyWatch(http, session).check(
+                    settings.state(),
+                    nowSeconds(),
+                    FlyWatchOptions(billing = billing, monthlyBudgetUsd = settings.budget.value?.takeIf { billing }),
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: FlyApiException.Unauthorized) {
@@ -50,6 +57,7 @@ class Watcher(
             val wanted =
                 when (alert) {
                     is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> settings.incidents.value
+                    is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> settings.billing.value
                     else -> settings.apps.value
                 }
             if (wanted) notifier.post(notification(alert))
@@ -67,7 +75,12 @@ class Watcher(
         )
 
     private suspend fun notification(alert: FlyAlert): HangarNotification {
-        val channel = if (alert is FlyAlert.IncidentOpened || alert is FlyAlert.IncidentResolved) Incidents else Apps
+        val channel =
+            when (alert) {
+                is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> Incidents
+                is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> Billing
+                else -> Apps
+            }
         val (title, body) =
             when (alert) {
                 is FlyAlert.IncidentOpened -> {
@@ -95,6 +108,23 @@ class Watcher(
                         getString(Res.string.notify_checks_body, machine(alert.machine), alert.checks.joinToString(", "))
                 }
 
+                is FlyAlert.BillingProblem -> {
+                    val (title, body) =
+                        when (alert.status) {
+                            "PAST_DUE" -> Res.string.notify_past_due_title to Res.string.notify_past_due_body
+                            "DELINQUENT" -> Res.string.notify_delinquent_title to Res.string.notify_delinquent_body
+                            "SUSPENDED" -> Res.string.notify_suspended_title to Res.string.notify_suspended_body
+                            "TRIAL_ENDED" -> Res.string.notify_trial_ended_title to Res.string.notify_payment_needed_body
+                            else -> Res.string.notify_payment_needed_title to Res.string.notify_payment_needed_body
+                        }
+                    getString(title, alert.name) to getString(body)
+                }
+
+                is FlyAlert.OverBudget -> {
+                    getString(Res.string.notify_spend_title, alert.org, usd(alert.projectedUsd)) to
+                        getString(Res.string.notify_spend_body, usd(alert.budgetUsd))
+                }
+
                 is FlyAlert.MachineCrashed -> {
                     if (alert.oomKilled) {
                         getString(Res.string.notify_oom_title, alert.app) to
@@ -115,5 +145,6 @@ class Watcher(
     private companion object {
         val Incidents = NotificationChannel.Incidents to Res.string.channel_incidents
         val Apps = NotificationChannel.Apps to Res.string.channel_apps
+        val Billing = NotificationChannel.Billing to Res.string.channel_billing
     }
 }

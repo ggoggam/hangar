@@ -28,11 +28,28 @@ class WatchSettings(
     /** Failed and crashing machines, failing health checks and host issues. */
     val apps: StateFlow<Boolean> = _apps.asStateFlow()
 
+    private val _billing = MutableStateFlow(store.read(KEY_BILLING)?.toBooleanStrictOrNull() ?: true)
+
+    /** Organizations' billing problems, and spend over [budget]. */
+    val billing: StateFlow<Boolean> = _billing.asStateFlow()
+
+    private val _budget = MutableStateFlow(store.read(KEY_BUDGET)?.toDoubleOrNull())
+
+    /** The monthly spend, in dollars, that an organization on pace to pass is notified of; null for none. */
+    val budget: StateFlow<Double?> = _budget.asStateFlow()
+
     fun setEnabled(enabled: Boolean) = set(KEY_ENABLED, _enabled, enabled)
 
     fun setIncidents(on: Boolean) = set(KEY_INCIDENTS, _incidents, on)
 
     fun setApps(on: Boolean) = set(KEY_APPS, _apps, on)
+
+    fun setBilling(on: Boolean) = set(KEY_BILLING, _billing, on)
+
+    fun setBudget(usd: Double?) {
+        store.write(KEY_BUDGET, usd?.toString().orEmpty())
+        _budget.value = usd
+    }
 
     /** The last check's state, or null before the first. */
     fun state(): FlyWatchState? = store.read(KEY_STATE)?.let(FlyWatchState::decode)
@@ -53,6 +70,8 @@ class WatchSettings(
         const val KEY_ENABLED = "watch.enabled"
         const val KEY_INCIDENTS = "watch.incidents"
         const val KEY_APPS = "watch.apps"
+        const val KEY_BILLING = "watch.billing"
+        const val KEY_BUDGET = "watch.budget"
         const val KEY_STATE = "watch.state"
     }
 }

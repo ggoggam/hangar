@@ -13,7 +13,8 @@ import org.kotlincrypto.hash.sha2.SHA256
 /**
  * The background check behind notifications: what has gone wrong since the last look. It reads what
  * the screens read: Fly.io's incidents (`fly incidents list`), and for each deployed app its
- * machines (`fly status`) and host issues (`fly incidents hosts list`). It compares them with
+ * machines (`fly status`) and host issues (`fly incidents hosts list`); if asked, each
+ * organization's billing status and projected spend too. It compares them with
  * [FlyWatchState], which keeps only fingerprints, so no app or machine name is written to disk.
  *
  * The first look, with no state, only takes note of what's wrong already: those problems are on
@@ -30,32 +31,35 @@ class FlyWatch(
      * What's new since [previous], and the state to keep for next time. An app or feed that can't
      * be reached keeps its old state, so a network failure never reads as a problem resolved. Throws
      * [FlyApiException.Unauthorized] when the session is over. [previous] from another account is
-     * ignored, so that account's first look only takes note too.
+     * ignored, so that account's first look only takes note too. [options] adds billing, which
+     * costs calls for each organization, so it's only looked at when asked for.
      */
     suspend fun check(
         previous: FlyWatchState?,
         nowSeconds: Long,
+        options: FlyWatchOptions = FlyWatchOptions(),
     ): FlyWatchResult =
         coroutineScope {
             // Another account's state, after signing in as someone else, says nothing about this one's.
             val account = fingerprint(session.token.value?.identity ?: "")
             val previous = previous?.takeIf { it.account == account }
             val incidents = async { runCatchingFly { FlyIncidents(http, incidentsUrl).active() } }
-            val apps =
-                session
-                    .authorized { FlyApi(http, it, apiUrl).overview() }
-                    .apps
-                    // Suspended and undeployed apps have no machines running to go wrong.
-                    .filter { it.deployed && it.status != "suspended" }
+            val billing = async { if (options.billing) runCatchingFly { billingStatuses() } else null }
+            val allApps = session.authorized { FlyApi(http, it, apiUrl).overview() }.apps
+            val spendDue =
+                options.monthlyBudgetUsd != null &&
+                    previous?.spendCheckedAt?.let { nowSeconds - it >= SPEND_EVERY_SECONDS } != false
+            val spend = async { if (spendDue) runCatchingFly { projectedSpend(allApps, nowSeconds) } else null }
+            // Suspended and undeployed apps have no machines running to go wrong.
+            val apps = allApps.filter { it.deployed && it.status != "suspended" }
             val gate = Semaphore(PARALLEL_APPS)
             val looks =
                 apps
                     .map { app ->
                         async {
                             gate.withPermit {
-                                val key = fingerprint(app.name)
                                 val look = runCatchingFly { look(app.name) }
-                                Triple(app.name, key, look)
+                                Triple(app.name, fingerprint(app.name), look)
                             }
                         }
                     }.awaitAll()
@@ -78,42 +82,150 @@ class FlyWatch(
                     open.associate { it.id to it.name }
                 }
 
-            val marks = mutableMapOf<String, FlyWatchState.Marks>()
+            val appMarks = mutableMapOf<String, FlyWatchState.Marks>()
             for ((app, key, look) in looks) {
                 val before = previous?.apps?.get(key)
                 if (look == null) {
-                    before?.let { marks[key] = it }
+                    before?.let { appMarks[key] = it }
                     continue
                 }
                 // Crashes since this app's last look; a new app's since the last look at all.
                 val sinceMillis = (before?.checkedAt ?: previous?.checkedAt ?: nowSeconds) * 1000
-                val problems = problems(app, look, sinceMillis)
-                val seen = problems.map { it.mark }.toSet()
-                val alerted =
-                    before
-                        ?.alerted
-                        .orEmpty()
-                        .intersect(seen)
-                        .toMutableSet()
-                for (problem in problems) {
-                    val due =
-                        when {
-                            baseline -> false
-
-                            problem.mark in alerted -> false
-
-                            // Checks fail for a moment while a machine starts or deploys, so one
-                            // counts once it was failing at the last look too.
-                            problem.alert is FlyAlert.ChecksFailing -> problem.mark in before?.seen.orEmpty()
-
-                            else -> true
-                        }
-                    if (due || baseline) alerted += problem.mark
-                    if (due) alerts += problem.alert
-                }
-                marks[key] = FlyWatchState.Marks(nowSeconds, seen, alerted)
+                appMarks[key] = track(before, problems(app, look, sinceMillis), baseline, nowSeconds, alerts)
             }
-            FlyWatchResult(alerts, FlyWatchState(account, nowSeconds, incidentNames, marks))
+
+            // Billing, kept from the last look while it isn't asked for or can't be reached.
+            val orgMarks = previous?.orgs.orEmpty().toMutableMap()
+            billing.await()?.let { statuses ->
+                orgMarks.clear()
+                for ((org, read) in statuses) {
+                    val key = fingerprint(org.slug)
+                    val before = previous?.orgs?.get(key)
+                    val status =
+                        read.getOrElse {
+                            before?.let { orgMarks[key] = it }
+                            continue
+                        }
+                    val problems =
+                        listOfNotNull(
+                            status?.takeIf { it in BILLING_PROBLEMS }?.let {
+                                Problem(fingerprint(org.slug, "billing", it), FlyAlert.BillingProblem(org.slug, org.name ?: org.slug, it))
+                            },
+                        )
+                    orgMarks[key] = track(before, problems, baseline, nowSeconds, alerts)
+                }
+            }
+            val spendMarks = previous?.spend.orEmpty().toMutableMap()
+            val spent = spend.await()
+            if (spent != null) {
+                val budget = options.monthlyBudgetUsd!!
+                spendMarks.clear()
+                for ((org, projected) in spent) {
+                    val key = fingerprint(org)
+                    val problems =
+                        listOfNotNull(
+                            // The budget is in the mark, so a new budget that's passed already is news.
+                            Problem(fingerprint(org, "spend", budget.toString()), FlyAlert.OverBudget(org, projected, budget))
+                                .takeIf { projected > budget },
+                        )
+                    spendMarks[key] = track(previous?.spend?.get(key), problems, baseline, nowSeconds, alerts)
+                }
+            }
+
+            FlyWatchResult(
+                alerts,
+                FlyWatchState(
+                    account,
+                    nowSeconds,
+                    incidentNames,
+                    appMarks,
+                    orgMarks,
+                    spendMarks,
+                    spendCheckedAt = if (spent != null) nowSeconds else previous?.spendCheckedAt,
+                ),
+            )
+        }
+
+    /**
+     * The marks for one app or organization with [problems] seen now, adding to [alerts] the ones
+     * that are news: not notified already, and for failing checks, failing at the last look too.
+     * At the [baseline] look nothing is news, and everything is taken as notified.
+     */
+    private fun track(
+        before: FlyWatchState.Marks?,
+        problems: List<Problem>,
+        baseline: Boolean,
+        nowSeconds: Long,
+        alerts: MutableList<FlyAlert>,
+    ): FlyWatchState.Marks {
+        val seen = problems.map { it.mark }.toSet()
+        val alerted =
+            before
+                ?.alerted
+                .orEmpty()
+                .intersect(seen)
+                .toMutableSet()
+        for (problem in problems) {
+            val due =
+                when {
+                    baseline -> false
+
+                    problem.mark in alerted -> false
+
+                    // Checks fail for a moment while a machine starts or deploys, so one counts
+                    // once it was failing at the last look too.
+                    problem.alert is FlyAlert.ChecksFailing -> problem.mark in before?.seen.orEmpty()
+
+                    else -> true
+                }
+            if (due || baseline) alerted += problem.mark
+            if (due) alerts += problem.alert
+        }
+        return FlyWatchState.Marks(nowSeconds, seen, alerted)
+    }
+
+    /** Each organization's billing status, as `fly launch` checks it, or a failure where it can't be read. */
+    private suspend fun billingStatuses(): List<Pair<FlyOrganization, Result<String?>>> =
+        coroutineScope {
+            val orgs = session.authorized { FlyApi(http, it, apiUrl).organizations() }
+            orgs
+                .map { org ->
+                    async {
+                        val status =
+                            runCatchingFly { Result.success(session.authorized { FlyApi(http, it, apiUrl).billingStatus(org.slug) }) }
+                        org to (status ?: Result.failure(FlyApiException.Failed("billing status")))
+                    }
+                }.awaitAll()
+        }
+
+    /**
+     * Each organization's spend this month, in dollars, at the rate [FlyUsage] estimates for the
+     * last [SPEND_WINDOW_SECONDS]: the shortest look back that Fly.io's Prometheus answers in one
+     * piece, so it fits in the time iOS gives a background refresh.
+     */
+    private suspend fun projectedSpend(
+        apps: List<FlyApp>,
+        nowSeconds: Long,
+    ): List<Pair<String, Double>> =
+        coroutineScope {
+            apps
+                .groupBy { it.organization.slug }
+                .map { (org, inOrg) ->
+                    async {
+                        val usage =
+                            session.authorized {
+                                FlyUsage(http, it, apiUrl, machinesUrl).estimate(
+                                    org,
+                                    inOrg.map { app ->
+                                        app.name
+                                    },
+                                    nowSeconds,
+                                    SPEND_WINDOW_SECONDS,
+                                )
+                            }
+                        org to usage.estimatedUsd * FlyPrices.SECONDS_PER_30_DAYS / SPEND_WINDOW_SECONDS
+                    }
+                }.awaitAll()
         }
 
     private suspend fun look(app: String): Look =
@@ -176,6 +288,17 @@ class FlyWatch(
     private companion object {
         /** Apps looked at once: each look is two calls, and Fly.io rate-limits the Machines API. */
         const val PARALLEL_APPS = 4
+
+        /** Spend moves slowly and costs a few Prometheus queries an organization, so four times a day. */
+        const val SPEND_EVERY_SECONDS = 6 * 3_600L
+
+        const val SPEND_WINDOW_SECONDS = FlyUsage.PIECE_SECONDS
+
+        /**
+         * The statuses worth a notification: a payment that failed or is overdue, or an
+         * organization that needs a payment method to keep running Machines, as `fly launch` puts it.
+         */
+        val BILLING_PROBLEMS = setOf("PAST_DUE", "DELINQUENT", "SUSPENDED", "SOURCE_REQUIRED", "TRIAL_ENDED")
     }
 }
 
@@ -204,8 +327,16 @@ internal fun fingerprint(vararg parts: String): String =
         .take(8)
         .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
 
+/** What to look at besides incidents and apps. */
+class FlyWatchOptions(
+    /** Each organization's billing status. */
+    val billing: Boolean = false,
+    /** Notify when an organization's projected spend this month passes this; null for never. */
+    val monthlyBudgetUsd: Double? = null,
+)
+
 class FlyWatchResult(
-    /** Oldest kind first: incidents, then apps in the order Fly.io lists them. */
+    /** Incidents, then apps in the order Fly.io lists them, then billing. */
     val alerts: List<FlyAlert>,
     val state: FlyWatchState,
 )
@@ -264,11 +395,29 @@ sealed class FlyAlert {
     ) : FlyAlert() {
         override val key get() = "machine:$app:${machine.id}"
     }
+
+    /** An organization whose billing [status] is one of the problems, such as `PAST_DUE`. */
+    class BillingProblem(
+        val slug: String,
+        val name: String,
+        val status: String,
+    ) : FlyAlert() {
+        override val key get() = "billing:$slug"
+    }
+
+    /** An organization on pace to spend [projectedUsd] this month, over the user's [budgetUsd]. */
+    class OverBudget(
+        val org: String,
+        val projectedUsd: Double,
+        val budgetUsd: Double,
+    ) : FlyAlert() {
+        override val key get() = "spend:$org"
+    }
 }
 
 /**
  * What the last look saw: the open incidents, which are Fly.io's public status, and for each app
- * only fingerprints of its problems, keyed by the app's fingerprint.
+ * and organization only fingerprints of its problems, keyed by its own fingerprint.
  */
 @Serializable
 class FlyWatchState(
@@ -278,6 +427,12 @@ class FlyWatchState(
     /** Open incidents' names by id, to say which one resolved. */
     val incidents: Map<String, String> = emptyMap(),
     val apps: Map<String, Marks> = emptyMap(),
+    /** Organizations' billing status problems. */
+    val orgs: Map<String, Marks> = emptyMap(),
+    /** Organizations over the spend alert. */
+    val spend: Map<String, Marks> = emptyMap(),
+    /** When spend was last estimated, which is less often than every look. */
+    val spendCheckedAt: Long? = null,
 ) {
     @Serializable
     class Marks(

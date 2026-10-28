@@ -40,6 +40,7 @@ enum class NotificationChannel(
 ) {
     Incidents("incidents"),
     Apps("apps"),
+    Billing("billing"),
     Account("account"),
 }
 

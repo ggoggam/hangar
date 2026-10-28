@@ -24,7 +24,8 @@ check this in the code at <https://github.com/ggoggam/hangar>.
   token.
 
 If you turn on background checks in Settings, the app makes the same requests to the same hosts
-while it isn't open, to notify you of Fly.io incidents and problems with your apps. The
+while it isn't open, to notify you of Fly.io incidents, problems with your apps, and billing
+problems or spend over an amount you set. The
 notifications come from your device; no push service or server is involved.
 
 Every request is sent over HTTPS. Fly.io handles what it receives under its own privacy policy, at
@@ -37,10 +38,11 @@ device's browser, and the app only receives the code Fly.io shows afterwards.
 
 - Your Fly.io token: sealed under an Android Keystore key and left out of backups, or in the iOS
   Keychain for this device only, so it never moves to another device.
-- Whether you picked dark or light mode, and which notifications you want.
+- Whether you picked dark or light mode, which notifications you want, and the spend alert's
+  amount if you set one.
 - For background checks, what the last check saw: the names of Fly.io's open incidents, which
   Fly.io publishes, and one-way fingerprints of the problems it has already told you about, which
-  don't contain your app or machine names.
+  don't contain your app, machine or organization names.
 
 Your email address, apps, logs and metrics are held in memory while they're on screen. The app
 doesn't write them to disk, log them or send them anywhere else. A notification names the app it's

@@ -150,6 +150,8 @@ through APNs, that's as often as iOS lets an app look. The Settings switch says 
 | Machine failed | A machine in the `failed` state, from `api.machines.dev/v1/apps/{app}/machines` (`fly status`). |
 | Machine crashed or ran out of memory | An `exit` event since the last check with a non-zero exit code or `oom_killed`, leaving out the stops someone asked for (`requested_stop`: autostop, deploys, `fly machine stop`). |
 | Health checks failing | A started machine's checks critical at two checks running, since they fail for a moment while a machine starts or deploys. |
+| Billing problem | An organization's GraphQL `billingStatus` turning `PAST_DUE`, `DELINQUENT`, `SUSPENDED`, `SOURCE_REQUIRED` or `TRIAL_ENDED`, as flyctl's `GetOrganization` reads it and `fly launch` checks it. One call per organization. |
+| Over the spend alert | An organization on pace to spend more than the amount set in Settings over 30 days, at its last 2 days' rate, from the same estimate as the app list (`FlyUsage`). Off until an amount is set, and estimated at most every 6 hours, since it's a few Prometheus queries per organization. |
 | Signed out | Fly.io turned the login down, so the checks have stopped. |
 
 The first check only takes note of what's already wrong, so turning the checks on doesn't bring a
@@ -191,11 +193,11 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   and the app only gets the code Fly.io shows afterwards.
 - **What it keeps.** The token, on the device: sealed under an Android Keystore key and
   excluded from backups (`allowBackup="false"`), or in the iOS Keychain for this device only.
-  Signing out deletes it. Besides that, only whether you picked dark or light mode and which
-  notifications you want, in SharedPreferences or NSUserDefaults, and for the background checks,
+  Signing out deletes it. Besides that, only whether you picked dark or light mode, which
+  notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
-  notified, never an app's or machine's name. Your email, apps, logs and metrics are held in
+  notified, never an app's, machine's or organization's name. Your email, apps, logs and metrics are held in
   memory while they're on screen: the app never writes them to disk, logs them or sends them
   anywhere. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients
