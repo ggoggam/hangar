@@ -94,6 +94,16 @@ class FlyApi(
             ?.nodes
             .orEmpty()
 
+    /**
+     * The organization's billing status, as `fly launch` checks it: `CURRENT`, `SOURCE_REQUIRED`,
+     * `PAST_DUE`, `DELINQUENT`, `TRIAL_ACTIVE`, `TRIAL_ENDED` or `SUSPENDED`. Null when Fly.io
+     * doesn't say, as it may not to a member who can't see billing.
+     */
+    suspend fun billingStatus(slug: String): String? =
+        query<OrganizationBillingData>(ORGANIZATION_BILLING_QUERY, buildJsonObject { put("slug", slug) })
+            .organization
+            ?.billingStatus
+
     /** The organizations the user belongs to, as `fly orgs list` lists them. */
     suspend fun organizations(): List<FlyOrganization> =
         query<OrganizationsData>(ORGANIZATIONS_QUERY, buildJsonObject {}).organizations.nodes.sortedBy { it.slug }
@@ -232,6 +242,13 @@ class FlyApi(
                 viewerRole
                 members { edges { node { id name email } joinedAt role } }
               }
+            }
+        """
+
+        // flyctl's GetOrganization, trimmed to the billing status `fly launch` checks before it deploys.
+        const val ORGANIZATION_BILLING_QUERY = """
+            query OrganizationBilling(${'$'}slug: String!) {
+              organization(slug: ${'$'}slug) { billingStatus }
             }
         """
 
@@ -516,6 +533,16 @@ private class WhoamiData(
 @Serializable
 private class OrganizationData(
     val organization: OrganizationDetail,
+)
+
+@Serializable
+private class OrganizationBillingData(
+    val organization: OrganizationBilling? = null,
+)
+
+@Serializable
+private class OrganizationBilling(
+    val billingStatus: String? = null,
 )
 
 @Serializable

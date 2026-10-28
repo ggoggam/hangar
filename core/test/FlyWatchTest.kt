@@ -26,6 +26,12 @@ class FlyWatchTest {
         val machines = mutableMapOf<String, String>()
         val machinesStatus = mutableMapOf<String, HttpStatusCode>()
         val hostIssues = mutableMapOf<String, String>()
+        var billingStatus = "CURRENT"
+        var billingFails = false
+
+        /** Minutes `web` ran as a shared-cpu-1x 256 MB in iad over the last two days. */
+        var minutesRun = 0
+        var promQueries = 0
         var unauthorized = false
 
         val http =
@@ -42,6 +48,22 @@ class FlyWatchTest {
                                 incidentsStatus to """{"incidents":$incidents}"""
                             }
 
+                            path.endsWith("/api/v1/query") -> {
+                                promQueries++
+                                val result =
+                                    if ("fly_instance_info" in request.url.parameters["query"].orEmpty() && minutesRun > 0) {
+                                        """[{"metric":{"app":"web","region":"iad","instance":"i1","cpu_kind":"shared",
+                                            "cpu_count":"1","memory_mb":"256"},"value":[0,"$minutesRun"]}]"""
+                                    } else {
+                                        "[]"
+                                    }
+                                HttpStatusCode.OK to """{"status":"success","data":{"resultType":"vector","result":$result}}"""
+                            }
+
+                            path.endsWith("/volumes") -> {
+                                HttpStatusCode.OK to "[]"
+                            }
+
                             path.startsWith("/v1/apps/") -> {
                                 val app = path.removePrefix("/v1/apps/").substringBefore('/')
                                 (machinesStatus[app] ?: HttpStatusCode.OK) to (machines[app] ?: "[]")
@@ -56,6 +78,13 @@ class FlyWatchTest {
                                         }
                                     HttpStatusCode.OK to
                                         """{"data":{"viewer":{"email":"a@b.c"},"apps":{"pageInfo":{"hasNextPage":false},"nodes":[$nodes]}}}"""
+                                } else if ("query Organizations" in query) {
+                                    HttpStatusCode.OK to
+                                        """{"data":{"organizations":{"nodes":[{"slug":"personal","name":"Me","type":"PERSONAL"}]}}}"""
+                                } else if ("query OrganizationBilling" in query && billingFails) {
+                                    HttpStatusCode.BadGateway to "bad gateway"
+                                } else if ("query OrganizationBilling" in query) {
+                                    HttpStatusCode.OK to """{"data":{"organization":{"billingStatus":"$billingStatus"}}}"""
                                 } else {
                                     val app = Regex(""""appName":"([^"]+)"""").find(query)!!.groupValues[1]
                                     HttpStatusCode.OK to
@@ -290,6 +319,67 @@ class FlyWatchTest {
             val world = World()
             world.unauthorized = true
             assertFailsWith<FlyApiException.Unauthorized> { watch(world).check(null, now) }
+        }
+
+    @Test
+    fun billingProblemsAreReportedWhenAskedFor() =
+        runTest {
+            val world = World()
+            val watch = watch(world)
+            val billing = FlyWatchOptions(billing = true)
+            val first = watch.check(null, now, billing)
+
+            world.billingStatus = "PAST_DUE"
+            // Not asked for: nothing to say, and nothing forgotten.
+            val unasked = watch.check(first.state, now + 900)
+            assertEquals(emptyList(), unasked.alerts)
+
+            val due = watch.check(unasked.state, now + 1800, billing)
+            val alert = assertIs<FlyAlert.BillingProblem>(due.alerts.single())
+            assertEquals("Me", alert.name)
+            assertEquals("PAST_DUE", alert.status)
+            assertEquals(emptyList(), watch.check(due.state, now + 2700, billing).alerts)
+
+            // A status that can't be read keeps what was known, so it isn't news when it can again.
+            world.billingFails = true
+            val unread = watch.check(due.state, now + 2700, billing)
+            world.billingFails = false
+            assertEquals(emptyList(), watch.check(unread.state, now + 3600, billing).alerts)
+
+            // From one problem to another is news too.
+            world.billingStatus = "DELINQUENT"
+            assertEquals(
+                "DELINQUENT",
+                assertIs<FlyAlert.BillingProblem>(watch.check(due.state, now + 3600, billing).alerts.single()).status,
+            )
+        }
+
+    @Test
+    fun spendOverTheBudgetIsReportedAtMostFourTimesADay() =
+        runTest {
+            val world = World()
+            // Two days of a shared-cpu-1x 256 MB in iad, $2.19 a month.
+            world.minutesRun = 2 * 24 * 60
+            val watch = watch(world)
+            val first = watch.check(null, now, FlyWatchOptions(monthlyBudgetUsd = 5.0))
+            assertTrue(world.promQueries > 0)
+
+            // Lowered under what it's on pace for, but not looked at again for six hours.
+            val queries = world.promQueries
+            val soon = watch.check(first.state, now + 900, FlyWatchOptions(monthlyBudgetUsd = 2.0))
+            assertEquals(emptyList(), soon.alerts)
+            assertEquals(queries, world.promQueries)
+
+            val later = watch.check(soon.state, now + 6 * 3600, FlyWatchOptions(monthlyBudgetUsd = 2.0))
+            val alert = assertIs<FlyAlert.OverBudget>(later.alerts.single())
+            assertEquals("personal", alert.org)
+            assertTrue(alert.projectedUsd > 2.18 && alert.projectedUsd < 2.20, "${alert.projectedUsd}")
+
+            assertEquals(emptyList(), watch.check(later.state, now + 12 * 3600, FlyWatchOptions(monthlyBudgetUsd = 2.0)).alerts)
+            // A new budget it's over already is news.
+            assertIs<FlyAlert.OverBudget>(
+                watch.check(later.state, now + 12 * 3600, FlyWatchOptions(monthlyBudgetUsd = 1.0)).alerts.single(),
+            )
         }
 
     @Test

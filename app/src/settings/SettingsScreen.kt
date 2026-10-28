@@ -1,14 +1,18 @@
 package dev.ggoggam.hangar.app.settings
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -20,19 +24,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Building2
+import com.composables.icons.lucide.CircleDollarSign
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.Receipt
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
 import dev.ggoggam.hangar.app.watch.WatchSettings
 import dev.ggoggam.hangar.app.watch.checksDetail
@@ -134,6 +142,12 @@ private fun Notifications(watch: WatchSettings) {
     val on by watch.enabled.collectAsStateWithLifecycle()
     val incidents by watch.incidents.collectAsStateWithLifecycle()
     val apps by watch.apps.collectAsStateWithLifecycle()
+    val billing by watch.billing.collectAsStateWithLifecycle()
+    val budget by watch.budget.collectAsStateWithLifecycle()
+    var editBudget by remember { mutableStateOf(false) }
+    if (editBudget) {
+        BudgetDialog(budget, onSave = { watch.setBudget(it) }, onDismiss = { editBudget = false })
+    }
     val ask = rememberNotificationPermission()
     var denied by remember { mutableStateOf(false) }
     Header(stringResource(Res.string.settings_notifications))
@@ -174,8 +188,88 @@ private fun Notifications(watch: WatchSettings) {
             Switch(checked = apps, onCheckedChange = null)
         }
         RowDivider()
+        SettingRow(
+            stringResource(Res.string.settings_notify_billing),
+            icon = Lucide.Receipt,
+            detail = stringResource(Res.string.settings_notify_billing_detail),
+            onClick = { watch.setBilling(!billing) },
+        ) {
+            Switch(checked = billing, onCheckedChange = null)
+        }
+        RowDivider()
+        if (billing) {
+            SettingRow(
+                stringResource(Res.string.settings_spend_alert),
+                icon = Lucide.CircleDollarSign,
+                detail =
+                    budget?.let { stringResource(Res.string.settings_spend_alert_on, usd(it)) }
+                        ?: stringResource(Res.string.settings_spend_alert_off),
+                onClick = { editBudget = true },
+                chevron = true,
+            )
+            RowDivider()
+        }
     }
 }
+
+/** Sets the monthly spend to be notified past, in whole or part dollars, or turns it off. */
+@Composable
+private fun BudgetDialog(
+    budget: Double?,
+    onSave: (Double?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(budget?.let { decimalText(it) }.orEmpty()) }
+    // Some keyboards type a decimal comma.
+    val amount =
+        text
+            .trim()
+            .removePrefix("$")
+            .replace(',', '.')
+            .toDoubleOrNull()
+            ?.takeIf { it > 0 }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.spend_alert_title)) },
+        text = {
+            Column {
+                Text(stringResource(Res.string.spend_alert_body))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(Res.string.spend_alert_label)) },
+                    prefix = { Text("$") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(amount)
+                    onDismiss()
+                },
+                enabled = amount != null,
+            ) { Text(stringResource(Res.string.spend_alert_save)) }
+        },
+        dismissButton = {
+            if (budget != null) {
+                TextButton(onClick = {
+                    onSave(null)
+                    onDismiss()
+                }) { Text(stringResource(Res.string.spend_alert_turn_off)) }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+    )
+}
+
+/** [value] as typed back into the field: `50`, not `50.0`. */
+private fun decimalText(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
 /** Asks before signing out, since signing in again means the browser and a code. */
 @Composable

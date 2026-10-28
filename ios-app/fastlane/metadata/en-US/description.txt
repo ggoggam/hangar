@@ -13,7 +13,7 @@ WHAT IT SHOWS
 • Fly.io's open incidents, with a banner on the app list while any are open
 • Your account, organizations, members, access tokens and regions
 
-Turn on background checks in Settings and Hangar notifies you of new Fly.io incidents, failed or crashed machines, failing health checks and host issues. It checks when iOS allows background refresh, which is less often for apps you rarely open.
+Turn on background checks in Settings and Hangar notifies you of new Fly.io incidents, failed or crashed machines, failing health checks, host issues, billing problems and spend over an amount you set. It checks when iOS allows background refresh, which is less often for apps you rarely open.
 
 Hangar can also start, stop, suspend and restart machines, and restart a whole app one machine at a time, asking first each time. It can't deploy, scale or delete anything.
 
