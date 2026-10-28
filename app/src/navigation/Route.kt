@@ -64,4 +64,11 @@ sealed interface Route {
         val org: String,
         val version: Int,
     ) : Route
+
+    /** One of [app]'s hostnames and its certificates, opened from the dashboard's Overview. */
+    @Serializable
+    data class Certificate(
+        val app: String,
+        val hostname: String,
+    ) : Route
 }

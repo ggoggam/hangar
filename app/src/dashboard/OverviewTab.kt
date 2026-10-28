@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +31,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TriangleAlert
@@ -61,6 +61,7 @@ internal fun LazyListScope.overview(
     state: DashboardState,
     onWindow: (MetricsWindow) -> Unit,
     onRestartApp: (rolling: Boolean) -> Unit,
+    onCertificate: (hostname: String) -> Unit,
 ) {
     // Only when there are some: a quiet app shouldn't carry an empty warning, or a failed one.
     state.hostIssues.value?.let { issues -> items(issues, key = { "host:${it.internalId}" }) { HostIssueCard(it) } }
@@ -106,7 +107,7 @@ internal fun LazyListScope.overview(
     section(state.certificates, "certs") { certs ->
         if (certs.isNotEmpty()) {
             item(key = "certs:title") { SectionTitle(stringResource(Res.string.certs_title)) }
-            item(key = "certs") { Panel { certs.forEach { CertRow(it) } } }
+            items(certs, key = { "cert:${it.hostname}" }) { CertRow(it) { onCertificate(it.hostname) } }
         }
     }
 }
@@ -455,17 +456,28 @@ private fun IpRow(ip: FlyIp) {
     }
 }
 
+/** A hostname and where its certificate stands, as `fly certs list` shows it; it opens the details. */
 @Composable
-private fun CertRow(cert: FlyCertificate) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            cert.hostname,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.padding(4.dp))
-        StatusBadge(cert.status, if (cert.status == "Ready") Tone.Ok else Tone.Warning)
+private fun CertRow(
+    cert: FlyCertificate,
+    onClick: () -> Unit,
+) {
+    Panel(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                cert.hostname,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            CertStateBadge(cert.state)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }

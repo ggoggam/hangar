@@ -3,6 +3,7 @@ package dev.ggoggam.hangar.app.di
 import dev.ggoggam.hangar.app.apps.AppPins
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
+import dev.ggoggam.hangar.app.dashboard.CertificateViewModel
 import dev.ggoggam.hangar.app.login.LoginViewModel
 import dev.ggoggam.hangar.app.settings.OrganizationViewModel
 import dev.ggoggam.hangar.app.settings.RegionsViewModel
@@ -68,6 +69,7 @@ private val appModule =
         viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }
         viewModel { RegionsViewModel(get(), get()) }
         viewModel { (app: String, org: String) -> AppDashboardViewModel(app, org, get(), get()) }
+        viewModel { (app: String, hostname: String) -> CertificateViewModel(app, hostname, get(), get()) }
     }
 
 /**

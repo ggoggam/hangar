@@ -11,6 +11,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.content.TextContent
+import io.ktor.http.decodeURLPart
 import io.ktor.http.headersOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -123,22 +124,19 @@ private class FlyDemo(
                         }
 
                         else -> {
-                            obj(
-                                "certificates" to
-                                    app.hostnames.map { h ->
-                                        mapOf(
-                                            "hostname" to h,
-                                            "status" to "Ready",
-                                            "configured" to true,
-                                        )
-                                    },
-                            )
+                            obj("certificates" to (app.hostnames + app.unverified).map { h -> certificateSummary(app, h) })
                         }
                     }
                 }
                 MANAGED_POSTGRES.matchEntire(path)?.let {
                     if (it.groupValues[1] != MPG["id"]) throw NotInDemo()
                     return managedPostgresCluster(it.groupValues[2])
+                }
+                CERTIFICATE.matchEntire(path)?.let {
+                    val app = app(it.groupValues[1])
+                    val hostname = it.groupValues[2].decodeURLPart()
+                    if (hostname !in app.hostnames + app.unverified) throw NotInDemo()
+                    return certificate(app, hostname)
                 }
                 when (path) {
                     "/v1/platform/regions" -> obj("Regions" to REGIONS.map(::region), "nearest" to "nrt")
@@ -485,6 +483,100 @@ private class FlyDemo(
         }
     }
 
+    private fun certificateSummary(
+        app: DemoApp,
+        hostname: String,
+    ): Map<String, Any?> {
+        val verified = hostname in app.hostnames
+        return mapOf(
+            "hostname" to hostname,
+            "status" to if (verified) "active" else "pending",
+            "configured" to verified,
+            "acme_requested" to true,
+            "acme_dns_configured" to false,
+            "acme_alpn_configured" to verified,
+            "acme_http_configured" to verified,
+            "has_custom_certificate" to false,
+            "has_fly_certificate" to verified,
+        )
+    }
+
+    /**
+     * A hostname's certificates, as `fly certs show` reads them: Let's Encrypt's RSA and ECDSA
+     * certificates for one that points at the app, and for one that doesn't yet, no certificate and
+     * Fly.io's word on why.
+     */
+    private fun certificate(
+        app: DemoApp,
+        hostname: String,
+    ): JsonElement {
+        val verified = hostname in app.hostnames
+        val issuedAt = now - 30 * DAY - (noise(app.seed, hostname.hashCode().toLong()) * 20 * DAY).toLong()
+        val expiresAt = issuedAt + 90 * DAY
+        val ip = app.ipSuffix
+        val certificates =
+            if (verified) {
+                listOf(
+                    mapOf(
+                        "source" to "fly",
+                        "status" to "active",
+                        "created_at" to iso(now - 120 * DAY),
+                        "expires_at" to iso(expiresAt),
+                        "issuer" to null,
+                        "issued" to
+                            listOf("rsa", "ecdsa").map {
+                                mapOf("type" to it, "expires_at" to iso(expiresAt), "certificate_authority" to "lets_encrypt")
+                            },
+                    ),
+                )
+            } else {
+                emptyList()
+            }
+        val errors =
+            if (verified) {
+                emptyList()
+            } else {
+                listOf(
+                    mapOf(
+                        "code" to "dns_not_configured",
+                        "message" to "$hostname doesn't resolve to this app's IP addresses.",
+                        "remediation" to "Add the A and AAAA records below at your DNS provider, or a CNAME to ${app.name}.fly.dev.",
+                        "timestamp" to iso(now - 20 * 60),
+                    ),
+                )
+            }
+        return obj(
+            "hostname" to hostname,
+            "configured" to verified,
+            "acme_requested" to true,
+            "status" to if (verified) "active" else "pending",
+            "rate_limited_until" to null,
+            "certificates" to certificates,
+            "validation" to
+                mapOf(
+                    "dns_configured" to false,
+                    "alpn_configured" to verified,
+                    "http_configured" to verified,
+                    "ownership_txt_configured" to false,
+                ),
+            "dns_requirements" to
+                mapOf(
+                    "a" to listOf("203.0.113.$ip"),
+                    "aaaa" to listOf("2001:db8::$ip"),
+                    "cname" to "${app.name}.fly.dev",
+                    "acme_challenge" to
+                        mapOf("name" to "_acme-challenge.$hostname", "target" to "$hostname.${fingerprint(app.name).take(6)}.flydns.net"),
+                    "ownership" to
+                        mapOf(
+                            "name" to "_fly-ownership.$hostname",
+                            "app_value" to "app-${fingerprint(app.name, "app").take(10)}",
+                            "org_value" to "org-${fingerprint(app.org.slug).take(10)}",
+                        ),
+                ),
+            "validation_errors" to errors,
+        )
+    }
+
     private fun volume(v: DemoVolume): Map<String, Any?> {
         val total = v.sizeGb * 1_000_000_000L
         return mapOf(
@@ -506,7 +598,7 @@ private class FlyDemo(
             emptyList()
         } else {
             // Documentation ranges (RFC 5737 and RFC 3849), so no real address appears.
-            val n = app.seed % 200 + 10
+            val n = app.ipSuffix
             listOf(
                 mapOf("ip" to "203.0.113.$n", "region" to "global", "shared" to true, "created_at" to iso(now - 41 * DAY)),
                 mapOf("ip" to "2001:db8::$n", "region" to "global", "shared" to false, "created_at" to iso(now - 41 * DAY)),
@@ -791,6 +883,7 @@ private class FlyDemo(
         val OLDER_POSTGRES = Regex("/api/v1/organizations/([^/]+)/postgres")
         val MANAGED_POSTGRES = Regex("/v1/postgres/([^/]+)(|/databases|/users|/backups)")
         val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates|secrets)")
+        val CERTIFICATE = Regex("/v1/apps/([^/]+)/certificates/([^/]+)")
         val MACHINE = Regex("/v1/apps/([^/]+)/machines/([^/]+)(|/lease|/wait|/start|/stop|/suspend|/restart)")
         val APP = Regex("/v1/apps/([^/]+)")
         val OPERATION = Regex("""query\s+(\w+)""")
@@ -888,6 +981,8 @@ private class DemoApp(
     val status: String = "deployed",
     val volumes: List<DemoVolume> = emptyList(),
     val hostnames: List<String> = emptyList(),
+    /** Hostnames added to the app whose DNS doesn't point at it yet, so they have no certificate. */
+    val unverified: List<String> = emptyList(),
     val postgres: Boolean = false,
     val cpuPercent: Double,
     val memoryShare: Double,
@@ -902,6 +997,9 @@ private class DemoApp(
 ) {
     val deployed: Boolean get() = status == "deployed"
     val seed: Int get() = name.hashCode() and 0xffff
+
+    /** The last part of its IP addresses, which its hostnames' A and AAAA records point at. */
+    val ipSuffix: Int get() = seed % 200 + 10
 }
 
 private val PERSONAL =
@@ -1017,6 +1115,7 @@ private val APPS =
                     DemoMachine("5683d97c6e4b02", "calm-field-7741", "ams", memoryMb = 512),
                 ),
             hostnames = listOf("example.com", "www.example.com"),
+            unverified = listOf("shop.example.com"),
             cpuPercent = 11.0,
             memoryShare = 0.55,
             requestsPerMinute = 610.0,

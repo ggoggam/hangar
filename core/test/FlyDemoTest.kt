@@ -122,7 +122,7 @@ class FlyDemoTest {
             // One volume nearly full, for Overview's warning.
             assertTrue(machines.volumes("blog").single().nearlyFull)
             assertEquals(2, machines.ips("web").size)
-            assertEquals("Ready", machines.certificates("web").first().status)
+            assertEquals(FlyCertState.Issued, machines.certificates("web").first().state)
 
             val metrics = FlyMetrics(http, token).dashboard("demo-team", "api", now)
             for (series in listOf(
