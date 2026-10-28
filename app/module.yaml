@@ -19,6 +19,7 @@ dependencies:
 dependencies@android:
   - $libs.androidx.activity.compose
   - $libs.androidx.browser
+  - $libs.androidx.work.runtime
 
 settings:
   kotlin:

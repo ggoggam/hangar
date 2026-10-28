@@ -9,6 +9,8 @@ import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentFeed
 import dev.ggoggam.hangar.app.storage.StorageViewModel
+import dev.ggoggam.hangar.app.watch.WatchSettings
+import dev.ggoggam.hangar.app.watch.Watcher
 import dev.ggoggam.hangar.core.FlyDischarges
 import dev.ggoggam.hangar.core.FlyIncidents
 import dev.ggoggam.hangar.core.FlyLogin
@@ -47,6 +49,9 @@ private val appModule =
         // Renewals on the main thread, where the screens sign in and out, so the token only changes there.
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
+        single { WatchSettings(get()) }
+        // Always the live client: the demo is never checked in the background.
+        single { Watcher(get(LIVE_HTTP), get(), get(), get()) }
         // Fetches through the screens' client as each load starts, so the demo's never reaches the network.
         single { IncidentFeed { FlyIncidents(get()).active() } }
         viewModel { LoginViewModel(get(), get(), get(LIVE_HTTP), get(), get(SESSION_NAME)) }
@@ -61,7 +66,8 @@ private val appModule =
 /**
  * Starts dependency injection with the platform's services in [platform]: a
  * [dev.ggoggam.hangar.core.TokenStore], a
- * [dev.ggoggam.hangar.app.settings.SettingsStore] and the [SESSION_NAME] string. Called once by each
+ * [dev.ggoggam.hangar.app.settings.SettingsStore], the [SESSION_NAME] string, and the
+ * [dev.ggoggam.hangar.app.watch.BackgroundChecks] and [dev.ggoggam.hangar.app.watch.Notifier]. Called once by each
  * platform's entry point before the first composition; later calls do nothing.
  */
 fun initHangar(platform: Module) {

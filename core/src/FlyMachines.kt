@@ -152,6 +152,9 @@ class FlyMachineEvent(
 
     /** For an `exit` event, whether the kernel killed it for running out of memory. */
     val oomKilled: Boolean get() = exitEvent?.get("oom_killed")?.jsonPrimitive?.booleanOrNull == true
+
+    /** For an `exit` event, whether it was asked to stop: an autostop, a deploy or `fly machine stop`. */
+    val requestedStop: Boolean get() = exitEvent?.get("requested_stop")?.jsonPrimitive?.booleanOrNull == true
 }
 
 @Serializable
