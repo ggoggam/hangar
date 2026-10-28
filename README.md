@@ -211,9 +211,9 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
   notified, never an app's, machine's, volume's or organization's name. The apps you pin to the top
-  of the list are kept the same way, as one-way fingerprints of their names (`FlyPins`). Your email, apps, logs, metrics and secrets' names are held in
-  memory while they're on screen: the app never writes them to disk, logs them or sends them
-  anywhere. A notification does name the app it's about, and the system keeps it until you
+  of the list are kept the same way, as one-way fingerprints of their names (`FlyPins`). Your email, apps, logs, metrics, secrets' names, and Managed Postgres databases', users' and
+  hosts' names are held in memory while they're on screen: the app never writes them to disk, logs
+  them or sends them anywhere. It never asks Fly.io for a database password or connection string. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients
   keep no response cache and no cookies (`core/src@android`, `core/src@ios`).
 
