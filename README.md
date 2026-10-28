@@ -129,6 +129,10 @@ prices on docs.fly.io/about/pricing as of 2026-10-26. It's an estimate: it leave
 IPv4 addresses, stopped Machines' storage, Managed Postgres, Redis and Tigris, discounts and credits,
 and it goes stale when Fly.io changes its prices, so update `FlyPrices` when they do.
 
+With 8 apps or more, a search field above the list narrows it by app or organization name, on
+the phone. Touching and holding an app pins it to the top, under Pinned, on this device. Pins are
+kept as one-way fingerprints of the apps' names (`FlyPins`), not the names.
+
 Everything except GraphQL takes `FlyV1` with only the macaroons (`FlyToken.machinesHeader`). An
 OAuth-only `Bearer` token gets a 401 there. The older Managed Postgres list is the exception: like
 flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
@@ -206,7 +210,8 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
-  notified, never an app's, machine's, volume's or organization's name. Your email, apps, logs, metrics and secrets' names are held in
+  notified, never an app's, machine's, volume's or organization's name. The apps you pin to the top
+  of the list are kept the same way, as one-way fingerprints of their names (`FlyPins`). Your email, apps, logs, metrics and secrets' names are held in
   memory while they're on screen: the app never writes them to disk, logs them or sends them
   anywhere. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients

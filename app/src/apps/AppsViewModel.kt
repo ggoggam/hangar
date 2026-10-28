@@ -10,6 +10,7 @@ import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlyIncident
 import dev.ggoggam.hangar.core.FlyOrgUsage
+import dev.ggoggam.hangar.core.FlyPins
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.FlyUsage
 import io.ktor.client.HttpClient
@@ -40,12 +41,16 @@ class AppsViewModel(
     private val http: HttpClient,
     private val session: FlySession,
     private val feed: IncidentFeed,
+    private val appPins: AppPins,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppsState())
     val state: StateFlow<AppsState> = _state.asStateFlow()
 
     /** Fly.io's open incidents, listed above the apps. The banner over every screen keeps them current. */
     val incidents: StateFlow<List<FlyIncident>?> = feed.incidents
+
+    /** The apps pinned to the top of the list, on this device. */
+    val pins: StateFlow<FlyPins> = appPins.pins
 
     private var load: Job? = null
 
@@ -64,6 +69,9 @@ class AppsViewModel(
         viewModelScope.launch { feed.refresh() }
         loadApps()
     }
+
+    /** Pins [app] to the top of the list, or unpins it. */
+    fun togglePin(app: FlyApp) = appPins.toggle(app.name)
 
     private fun loadApps() {
         if (session.token.value == null) return

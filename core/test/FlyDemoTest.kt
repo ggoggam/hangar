@@ -17,7 +17,24 @@ class FlyDemoTest {
         runTest {
             val overview = FlyApi(http, token).overview()
             assertEquals("demo@example.com", overview.email)
-            assertEquals(listOf("api", "api-db", "web", "worker", "blog", "status-bot").sorted(), overview.apps.map { it.name }.sorted())
+            // Enough for the app list's search field.
+            assertEquals(
+                listOf(
+                    "admin",
+                    "api",
+                    "api-db",
+                    "api-staging",
+                    "docs",
+                    "image-resizer",
+                    "web",
+                    "worker",
+                    "blog",
+                    "discord-bot",
+                    "portfolio",
+                    "status-bot",
+                ),
+                overview.apps.map { it.name },
+            )
             assertTrue(overview.apps.all { it.currentRelease != null })
             assertTrue(FlyIncidents(http).active().isEmpty())
         }
