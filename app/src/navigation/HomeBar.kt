@@ -9,7 +9,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
@@ -26,7 +25,6 @@ enum class HomeTab(
 ) {
     Apps(Route.Apps, Res.string.nav_apps, Lucide.LayoutGrid),
     Data(Route.Storage, Res.string.nav_data, Lucide.Database),
-    Status(Route.Status, Res.string.nav_status, Lucide.Activity),
     Settings(Route.Settings, Res.string.nav_settings, Lucide.Settings),
 }
 

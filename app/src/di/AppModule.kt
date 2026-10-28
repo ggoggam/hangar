@@ -7,9 +7,10 @@ import dev.ggoggam.hangar.app.settings.OrganizationViewModel
 import dev.ggoggam.hangar.app.settings.RegionsViewModel
 import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
-import dev.ggoggam.hangar.app.status.StatusViewModel
+import dev.ggoggam.hangar.app.status.IncidentFeed
 import dev.ggoggam.hangar.app.storage.StorageViewModel
 import dev.ggoggam.hangar.core.FlyDischarges
+import dev.ggoggam.hangar.core.FlyIncidents
 import dev.ggoggam.hangar.core.FlyLogin
 import dev.ggoggam.hangar.core.FlySession
 import dev.ggoggam.hangar.core.flyDemoHttpClient
@@ -46,9 +47,10 @@ private val appModule =
         // Renewals on the main thread, where the screens sign in and out, so the token only changes there.
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
+        // Fetches through the screens' client as each load starts, so the demo's never reaches the network.
+        single { IncidentFeed { FlyIncidents(get()).active() } }
         viewModel { LoginViewModel(get(), get(), get(LIVE_HTTP), get(), get(SESSION_NAME)) }
-        viewModel { AppsViewModel(get(), get()) }
-        viewModel { StatusViewModel(get()) }
+        viewModel { AppsViewModel(get(), get(), get()) }
         viewModel { StorageViewModel(get(), get()) }
         viewModel { SettingsViewModel(get(), get()) }
         viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }

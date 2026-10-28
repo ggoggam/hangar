@@ -113,7 +113,7 @@ The bottom bar switches between the app list and three more screens:
 
 | Screen | Source |
 |---|---|
-| Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. The app list shows a banner while any incident is open, as flyctl warns before its commands. A link opens status.fly.io in the browser, as `fly platform status` does. |
+| Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. Open incidents are listed at the top of the app list, and a dismissable banner runs across the top of every screen while any is open, as flyctl warns before its commands. Checked every minute while the app is in front. A link opens status.fly.io in the browser, as `fly platform status` does. |
 | Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). |
 | Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
 
