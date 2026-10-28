@@ -6,10 +6,6 @@ sealed interface Route {
     @Serializable
     data object Apps : Route
 
-    /** Fly.io's open incidents. */
-    @Serializable
-    data object Status : Route
-
     /** Databases and buckets across the user's organizations. */
     @Serializable
     data object Storage : Route

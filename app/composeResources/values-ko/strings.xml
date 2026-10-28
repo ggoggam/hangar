@@ -81,8 +81,8 @@
     <string name="time_minutes_ago">%1$d분 전</string>
     <string name="time_hours_ago">%1$d시간 전</string>
     <string name="time_days_ago">%1$d일 전</string>
-    <string name="apps_incidents">Fly.io에 진행 중인 장애가 %1$d건 있어요</string>
-    <string name="status_title">Fly.io 상태</string>
+    <string name="incident_banner">Fly.io 장애: %1$s · %2$s</string>
+    <string name="incident_dismiss">닫기</string>
     <string name="status_none">Fly.io에 진행 중인 장애가 없어요.</string>
     <string name="status_started">%1$s 시작</string>
     <string name="status_updated">%1$s 업데이트</string>
@@ -108,7 +108,6 @@
     <string name="data_prod_pack">프로덕션 팩</string>
     <string name="nav_apps">앱</string>
     <string name="nav_data">데이터</string>
-    <string name="nav_status">상태</string>
     <string name="nav_settings">설정</string>
     <string name="settings_title">설정</string>
     <string name="settings_appearance">화면</string>

@@ -1,6 +1,5 @@
 package dev.ggoggam.hangar.app.apps
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,12 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.TriangleAlert
-import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.dashboard.Load
 import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.status.incidentList
 import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
@@ -46,7 +45,6 @@ import dev.ggoggam.hangar.app.ui.decimal
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlyAppUsage
-import dev.ggoggam.hangar.core.FlyIncident
 import dev.ggoggam.hangar.core.FlyOrgUsage
 import org.jetbrains.compose.resources.stringResource
 
@@ -55,10 +53,10 @@ import org.jetbrains.compose.resources.stringResource
 fun AppsScreen(
     vm: AppsViewModel,
     onOpen: (FlyApp) -> Unit,
-    onStatus: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val incidents by vm.incidents.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -80,107 +78,76 @@ fun AppsScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             val apps = state.apps
-            when {
-                state.failed && apps == null -> {
-                    Message(stringResource(Res.string.apps_failed)) {
-                        Button(onClick = vm::refresh) { Text(stringResource(Res.string.apps_retry)) }
+            // One list whatever the apps' state, so the incidents stay on top and pull-to-refresh
+            // still works on an empty or failed list.
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                incidentList(incidents)
+                when {
+                    state.failed && apps == null -> {
+                        item(key = "message") {
+                            Message(stringResource(Res.string.apps_failed)) {
+                                Button(onClick = vm::refresh) { Text(stringResource(Res.string.apps_retry)) }
+                            }
+                        }
+                    }
+
+                    apps == null -> {}
+
+                    apps.isEmpty() -> {
+                        item(key = "message") { Message(stringResource(Res.string.apps_empty)) }
+                    }
+
+                    else -> {
+                        appList(apps, state.usage, onOpen)
                     }
                 }
-
-                apps == null -> {}
-
-                apps.isEmpty() -> {
-                    Message(stringResource(Res.string.apps_empty))
-                }
-
-                else -> {
-                    AppList(apps, state.incidents.orEmpty(), state.usage, onOpen, onStatus)
-                }
             }
         }
     }
 }
 
-@Composable
-private fun AppList(
+private fun LazyListScope.appList(
     apps: List<FlyApp>,
-    incidents: List<FlyIncident>,
     usage: Load<Map<String, FlyOrgUsage>>,
     onOpen: (FlyApp) -> Unit,
-    onStatus: () -> Unit,
 ) {
     val byOrg = apps.groupBy { it.organization.slug }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        if (incidents.isNotEmpty()) {
-            item(key = "incidents") {
-                IncidentsBanner(incidents.size, onStatus)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            }
+    // Usage on top, one card per organization since each is billed on its own.
+    when (usage) {
+        Load.Loading -> {
+            item(key = "usage:loading") { UsagePlaceholder() }
         }
-        // Usage on top, one card per organization since each is billed on its own.
-        when (usage) {
-            Load.Loading -> {
-                item(key = "usage:loading") { UsagePlaceholder() }
-            }
 
-            Load.Failed -> {
-                item(key = "usage:failed") {
-                    Text(
-                        stringResource(Res.string.usage_failed),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-                    )
-                }
-            }
-
-            is Load.Ready -> {
-                byOrg.keys.mapNotNull { usage.value[it] }.forEach { org ->
-                    item(key = "usage:${org.org}") { UsageCard(org, showOrg = byOrg.size > 1) }
-                }
-            }
-        }
-        byOrg.forEach { (org, inOrg) ->
-            item(key = "org:$org") {
+        Load.Failed -> {
+            item(key = "usage:failed") {
                 Text(
-                    org,
-                    style = MaterialTheme.typography.labelMedium,
+                    stringResource(Res.string.usage_failed),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
                 )
             }
-            items(inOrg, key = { "app:${it.name}" }) { app ->
-                AppRow(app, usage.value?.get(org)?.app(app.name), onClick = { onOpen(app) })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
+
+        is Load.Ready -> {
+            byOrg.keys.mapNotNull { usage.value[it] }.forEach { org ->
+                item(key = "usage:${org.org}") { UsageCard(org, showOrg = byOrg.size > 1) }
             }
         }
     }
-}
-
-/** Fly.io's open incidents, as flyctl warns of them before a command; tapping opens the status screen. */
-@Composable
-private fun IncidentsBanner(
-    count: Int,
-    onClick: () -> Unit,
-) {
-    val warning = LocalStatusColors.current.warning
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(LocalStatusColors.current.warningTint)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(Lucide.TriangleAlert, contentDescription = null, tint = warning, modifier = Modifier.size(18.dp))
-        Text(
-            stringResource(Res.string.apps_incidents, count),
-            style = MaterialTheme.typography.bodyMedium,
-            color = warning,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(Lucide.ChevronRight, contentDescription = null, tint = warning, modifier = Modifier.size(18.dp))
+    byOrg.forEach { (org, inOrg) ->
+        item(key = "org:$org") {
+            Text(
+                org,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
+            )
+        }
+        items(inOrg, key = { "app:${it.name}" }) { app ->
+            AppRow(app, usage.value?.get(org)?.app(app.name), onClick = { onOpen(app) })
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
     }
 }
 
@@ -272,15 +239,10 @@ private fun Message(
     text: String,
     action: (@Composable () -> Unit)? = null,
 ) {
-    // In a scrollable box so pull-to-refresh still works on an empty or failed list.
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    action?.invoke()
-                }
-            }
+    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            action?.invoke()
         }
     }
 }
