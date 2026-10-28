@@ -23,6 +23,22 @@ class FlyDemoTest {
         }
 
     @Test
+    fun machineActionsTakeEffect() =
+        runTest {
+            val machines = FlyMachines(http, token)
+            val actions = FlyMachineActions(http, token)
+            val id = machines.machines("api").first().id
+
+            actions.stopMachine("api", id)
+            assertEquals("stopped", machines.machines("api").first { it.id == id }.state)
+            actions.startMachine("api", id)
+            assertEquals("started", machines.machines("api").first { it.id == id }.state)
+            actions.restartApp("api")
+            assertTrue(machines.machines("api").all { it.state == "started" })
+            assertFailsWith<FlyActionException.PostgresApp> { actions.restartApp("api-db") }
+        }
+
+    @Test
     fun answersEveryDashboardTab() =
         runTest {
             val api = FlyApi(http, token)

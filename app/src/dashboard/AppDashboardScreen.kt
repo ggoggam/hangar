@@ -16,6 +16,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -24,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -63,6 +66,10 @@ fun AppDashboardScreen(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
+    // Each action's outcome, one after another.
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(vm) { vm.notices.collect { snackbar.showSnackbar(noticeText(it)) } }
+
     // Keep the numbers current while the screen is in front, like a dashboard left open.
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -97,6 +104,7 @@ fun AppDashboardScreen(
                 }
             }
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         val modifier = Modifier.fillMaxSize().padding(padding)
         when (DashboardTab.entries[tab]) {
@@ -112,8 +120,8 @@ fun AppDashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         when (DashboardTab.entries[tab]) {
-                            DashboardTab.Overview -> overview(state, vm::setWindow)
-                            DashboardTab.Machines -> machines(state.machines)
+                            DashboardTab.Overview -> overview(state, vm::setWindow, vm::restartApp)
+                            DashboardTab.Machines -> machines(state.machines, state.busy, vm::act)
                             DashboardTab.Releases -> releases(state.releases)
                             DashboardTab.Logs -> Unit
                         }

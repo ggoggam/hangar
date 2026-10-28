@@ -82,7 +82,8 @@ token is turned down too, and only if it's still the signed-in one, so a late 40
 token can't sign out a newer one.
 
 Pasting a token also works, for anyone who would rather give the app a read-only one
-(`fly tokens create readonly <org>`) than a full login.
+(`fly tokens create readonly <org>`) than a full login. Fly.io turns down the machine actions
+for a read-only token, and the app says so rather than signing out.
 
 "Try the demo" signs in with a token of its own (`DEMO_TOKEN`) instead. While it's signed in, the
 screens get an HTTP client on Ktor's mock engine that answers each of the calls below with sample
@@ -103,9 +104,9 @@ the ones flyctl and fly-go make:
 
 | Tab | Source |
 |---|---|
-| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`. Host issues under the app's machines, when there are any, come from GraphQL `app.hostIssues` (fly-go's `GetAppHostIssues`, behind `fly incidents hosts list`). |
+| Overview | GraphQL `app(name:)` (fly-go's `GetAppCompact`). Volumes, IPs and certificates come from `api.machines.dev/v1/apps/{app}/volumes`, `/ip_assignments` and `/certificates`. Host issues under the app's machines, when there are any, come from GraphQL `app.hostIssues` (fly-go's `GetAppHostIssues`, behind `fly incidents hosts list`). Restart app does what `fly apps restart` does: it leases the running machines and restarts them one after another, each started and passing its checks before the next, or all at once if you choose. Postgres apps (`app_role` `postgres_cluster` at `/v1/apps/{app}`) are left to `fly pg restart`, as flyctl leaves them. |
 | Metrics | Fly.io's managed Prometheus: `api.fly.io/prometheus/{org}/api/v1/query_range` over 1, 6 or 24 hours, for CPU, memory, edge requests and errors per minute, and p95 latency. flyctl has no metrics command; these follow Fly.io's Grafana boards. "Open in Grafana" opens the app's board on fly-metrics.net in the browser, the page `fly dashboard metrics --grafana` opens. |
-| Machines | `api.machines.dev/v1/apps/{app}/machines`, filtered the way `fly status` filters it: no destroyed, release-command or console machines, and no `bg_deployments_compat` checks. Each machine's config `env` is never decoded. |
+| Machines | `api.machines.dev/v1/apps/{app}/machines`, filtered the way `fly status` filters it: no destroyed, release-command or console machines, and no `bg_deployments_compat` checks. Each machine's config `env` is never decoded. Start, stop, suspend and restart go through `/v1/apps/{app}/machines/{id}/start`, `/stop`, `/suspend` and `/restart`, each under the machine's lease as flyctl takes one (`POST …/lease`, the action with the `fly-machine-lease-nonce` header, `DELETE …/lease`). A restart waits on `…/wait?state=started` and then for the machine's checks to pass, as `fly machine restart` does. Stopping, suspending and restarting ask first. |
 | Releases | GraphQL `releasesUnprocessed` (fly-go's `GetAppReleasesMachines`), the last 25. |
 | Logs | `api.fly.io/api/v1/apps/{app}/logs?next_token=&instance=`, polled the way `fly logs` polls when it can't use NATS: straight away while pages come back full, backing off to 4 seconds when quiet. JSON log lines are shown as their message plus `key=value` fields. |
 

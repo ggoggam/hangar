@@ -13,7 +13,7 @@ WHAT IT SHOWS
 • Fly.io's open incidents, with a banner on the app list while any are open
 • Your account, organizations, members, access tokens and regions
 
-Hangar is read-only. It can't deploy, restart, scale or delete anything.
+Hangar can also start, stop, suspend and restart machines, and restart a whole app one machine at a time, asking first each time. It can't deploy, scale or delete anything.
 
 SIGNING IN
 Sign in on fly.io in your browser, the same way fly auth login does, and paste the code Fly.io shows. Or paste an access token: a read-only one is enough (fly tokens create readonly your-org). No account yet? Try the demo, which opens every screen on sample data.

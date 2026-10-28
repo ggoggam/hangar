@@ -2,6 +2,7 @@ package dev.ggoggam.hangar.app.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.ggoggam.hangar.core.FlyActionException
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApiException
 import dev.ggoggam.hangar.core.FlyAppDetail
@@ -12,6 +13,7 @@ import dev.ggoggam.hangar.core.FlyIp
 import dev.ggoggam.hangar.core.FlyLogEntry
 import dev.ggoggam.hangar.core.FlyLogs
 import dev.ggoggam.hangar.core.FlyMachine
+import dev.ggoggam.hangar.core.FlyMachineActions
 import dev.ggoggam.hangar.core.FlyMachines
 import dev.ggoggam.hangar.core.FlyMetrics
 import dev.ggoggam.hangar.core.FlyRelease
@@ -22,10 +24,13 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -88,7 +93,53 @@ data class DashboardState(
     val metrics: Load<FlyAppMetrics> = Load.Loading,
     val window: MetricsWindow = MetricsWindow.Hour,
     val refreshing: Boolean = false,
+    /** The machines an action is under way on, by id. */
+    val busy: Map<String, Action> = emptyMap(),
+    /** The app's restart while it's under way. */
+    val appRestart: AppRestart? = null,
 )
+
+/** What the dashboard can do to a machine, or to the whole app. */
+enum class Action {
+    Start,
+    Stop,
+    Suspend,
+    Restart,
+    RestartApp,
+}
+
+/** An app restart's progress: [done] of [total] running machines restarted so far. */
+data class AppRestart(
+    val done: Int = 0,
+    val total: Int = 0,
+)
+
+/** How an action went, for the screen to say once. [target] is the machine's name, or the app's. */
+sealed interface ActionNotice {
+    val action: Action
+    val target: String
+
+    data class Done(
+        override val action: Action,
+        override val target: String,
+    ) : ActionNotice
+
+    data class Failed(
+        override val action: Action,
+        override val target: String,
+        val reason: ActionFailure,
+        /** Fly.io's own words, for [ActionFailure.Other] when it said something. */
+        val detail: String? = null,
+    ) : ActionNotice
+}
+
+enum class ActionFailure {
+    NotAllowed,
+    Busy,
+    PostgresApp,
+    TimedOut,
+    Other,
+}
 
 data class LogsState(
     val entries: List<FlyLogEntry> = emptyList(),
@@ -112,6 +163,11 @@ class AppDashboardViewModel(
 
     private val _logs = MutableStateFlow(LogsState())
     val logs: StateFlow<LogsState> = _logs.asStateFlow()
+
+    private val _notices = Channel<ActionNotice>(Channel.BUFFERED)
+
+    /** Each action's outcome, once. */
+    val notices: Flow<ActionNotice> = _notices.receiveAsFlow()
 
     private var logCursor: String? = null
     private var metricsJob: Job? = null
@@ -167,6 +223,87 @@ class AppDashboardViewModel(
         get: (DashboardState) -> Load<T>,
         set: (DashboardState, Load<T>) -> DashboardState,
     ) = viewModelScope.loadInto(_state, session, fetch, get, set)
+
+    /**
+     * Starts, stops, suspends or restarts [machine], as `fly machine` does, then loads the dashboard
+     * again. One action at a time per machine.
+     */
+    fun act(
+        machine: FlyMachine,
+        action: Action,
+    ) {
+        if (machine.id in _state.value.busy) return
+        _state.update { it.copy(busy = it.busy + (machine.id to action)) }
+        viewModelScope.launch {
+            val notice =
+                perform(action, machine.name.ifEmpty { machine.id }) { actions ->
+                    when (action) {
+                        Action.Start -> actions.startMachine(appName, machine.id)
+                        Action.Stop -> actions.stopMachine(appName, machine.id)
+                        Action.Suspend -> actions.suspendMachine(appName, machine.id)
+                        Action.Restart -> actions.restartMachine(appName, machine.id)
+                        Action.RestartApp -> error("not a machine's action")
+                    }
+                }
+            _state.update { it.copy(busy = it.busy - machine.id) }
+            finish(notice)
+        }
+    }
+
+    /**
+     * Restarts the app's running machines, as `fly apps restart` does: [rolling], one after another
+     * as each passes its checks, or all at once.
+     */
+    fun restartApp(rolling: Boolean) {
+        if (_state.value.appRestart != null) return
+        _state.update { it.copy(appRestart = AppRestart()) }
+        viewModelScope.launch {
+            val notice =
+                perform(Action.RestartApp, appName) { actions ->
+                    actions.restartApp(appName, rolling) { done, total -> _state.update { it.copy(appRestart = AppRestart(done, total)) } }
+                }
+            _state.update { it.copy(appRestart = null) }
+            finish(notice)
+        }
+    }
+
+    /** [block] with the session's token, and how it went. Null when the session is over. */
+    private suspend fun perform(
+        action: Action,
+        target: String,
+        block: suspend (FlyMachineActions) -> Unit,
+    ): ActionNotice? {
+        fun failed(
+            reason: ActionFailure,
+            detail: String? = null,
+        ) = ActionNotice.Failed(action, target, reason, detail)
+        return try {
+            session.authorized { block(FlyMachineActions(http, it)) }
+            ActionNotice.Done(action, target)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: FlyApiException.Unauthorized) {
+            null
+        } catch (e: FlyActionException.NotAllowed) {
+            failed(ActionFailure.NotAllowed)
+        } catch (e: FlyActionException.Busy) {
+            failed(ActionFailure.Busy)
+        } catch (e: FlyActionException.PostgresApp) {
+            failed(ActionFailure.PostgresApp)
+        } catch (e: FlyActionException.TimedOut) {
+            failed(ActionFailure.TimedOut)
+        } catch (e: FlyApiException.Failed) {
+            failed(ActionFailure.Other, e.message)
+        } catch (e: Exception) {
+            failed(ActionFailure.Other)
+        }
+    }
+
+    /** Says how it went and shows where it left the app. */
+    private suspend fun finish(notice: ActionNotice?) {
+        notice?.let { _notices.send(it) }
+        loadAll().forEach { it.join() }
+    }
 
     /** Narrows the logs to one machine, or all of them for null, starting over from the latest. */
     fun setLogInstance(instance: String?) {

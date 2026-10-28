@@ -10,7 +10,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** The Machines API at api.machines.dev, read-only: an app's machines, volumes, IPs and certificates. */
+/** The Machines API at api.machines.dev, for reading: an app's machines, volumes, IPs and certificates. Actions are [FlyMachineActions]. */
 class FlyMachines(
     private val http: HttpClient,
     private val token: FlyToken,
