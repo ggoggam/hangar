@@ -9,12 +9,13 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import org.kotlincrypto.hash.sha2.SHA256
+import kotlin.time.Instant
 
 /**
  * The background check behind notifications: what has gone wrong since the last look. It reads what
- * the screens read: Fly.io's incidents (`fly incidents list`), and for each deployed app its
- * machines (`fly status`) and host issues (`fly incidents hosts list`); if asked, each
- * organization's billing status and projected spend too. It compares them with
+ * the screens read: Fly.io's incidents (`fly incidents list`), each app's latest release from the app
+ * list, and for each deployed app its machines (`fly status`) and host issues (`fly incidents hosts
+ * list`); if asked, each organization's billing status and projected spend too. It compares them with
  * [FlyWatchState], which keeps only fingerprints, so no app or machine name is written to disk.
  *
  * The first look, with no state, only takes note of what's wrong already: those problems are on
@@ -58,11 +59,11 @@ class FlyWatch(
                     .map { app ->
                         async {
                             gate.withPermit {
-                                val look = runCatchingFly { look(app.name) }
-                                Triple(app.name, fingerprint(app.name), look)
+                                app.name to runCatchingFly { look(app.name) }
                             }
                         }
                     }.awaitAll()
+                    .toMap()
 
             val alerts = mutableListOf<FlyAlert>()
             val baseline = previous == null
@@ -82,16 +83,20 @@ class FlyWatch(
                     open.associate { it.id to it.name }
                 }
 
+            // Every app, for its deploys; an app that's running, for its machines too.
             val appMarks = mutableMapOf<String, FlyWatchState.Marks>()
-            for ((app, key, look) in looks) {
+            for (app in allApps) {
+                val key = fingerprint(app.name)
                 val before = previous?.apps?.get(key)
-                if (look == null) {
+                val look = looks[app.name]
+                if (app.name in looks && look == null) {
                     before?.let { appMarks[key] = it }
                     continue
                 }
-                // Crashes since this app's last look; a new app's since the last look at all.
+                // Crashes and deploys since this app's last look; a new app's since the last look at all.
                 val sinceMillis = (before?.checkedAt ?: previous?.checkedAt ?: nowSeconds) * 1000
-                appMarks[key] = track(before, problems(app, look, sinceMillis), baseline, nowSeconds, alerts)
+                val problems = look?.let { problems(app, it, sinceMillis) }.orEmpty() + deploy(app, before, sinceMillis)
+                appMarks[key] = track(before, problems, baseline, nowSeconds, alerts)
             }
 
             // Billing, kept from the last look while it isn't asked for or can't be reached.
@@ -166,6 +171,7 @@ class FlyWatch(
                 .intersect(seen)
                 .toMutableSet()
         for (problem in problems) {
+            if (problem.alert == null) continue
             val due =
                 when {
                     baseline -> false
@@ -236,24 +242,26 @@ class FlyWatch(
         }
 
     private fun problems(
-        app: String,
+        flyApp: FlyApp,
         look: Look,
         sinceMillis: Long,
     ): List<Problem> =
         buildList {
+            val app = flyApp.name
+            val org = flyApp.organization.slug
             for (issue in look.hostIssues) {
-                add(Problem(fingerprint(app, "host", issue.internalId), FlyAlert.HostIssue(app, issue)))
+                add(Problem(fingerprint(app, "host", issue.internalId), FlyAlert.HostIssue(app, org, issue)))
             }
             for (machine in look.machines) {
                 if (machine.state == "failed") {
-                    add(Problem(fingerprint(app, "failed", machine.id), FlyAlert.MachineFailed(app, machine)))
+                    add(Problem(fingerprint(app, "failed", machine.id), FlyAlert.MachineFailed(app, org, machine)))
                 }
                 val critical = machine.checks.filter { it.status == "critical" }
                 if (machine.state == "started" && critical.isNotEmpty()) {
                     add(
                         Problem(
                             fingerprint(app, "checks", machine.id),
-                            FlyAlert.ChecksFailing(app, machine, critical.map { it.name }),
+                            FlyAlert.ChecksFailing(app, org, machine, critical.map { it.name }),
                         ),
                     )
                 }
@@ -268,21 +276,46 @@ class FlyWatch(
                         add(
                             Problem(
                                 fingerprint(app, "exit", machine.id, exit.timestamp.toString()),
-                                FlyAlert.MachineCrashed(app, machine, exit.exitCode, exit.oomKilled),
+                                FlyAlert.MachineCrashed(app, org, machine, exit.exitCode, exit.oomKilled),
                             ),
                         )
                     }
             }
         }
 
+    /**
+     * [app]'s latest release as a problem: one still deploying is only taken note of, and one that
+     * ended is news if it ended since [sinceMillis] or was still deploying at the last look, which
+     * catches a long deploy and a phone clock that runs ahead of Fly.io's.
+     */
+    private fun deploy(
+        app: FlyApp,
+        before: FlyWatchState.Marks?,
+        sinceMillis: Long,
+    ): List<Problem> {
+        val release = app.latestRelease ?: return emptyList()
+        val deploying = fingerprint(app.name, "deploying", release.version.toString())
+        if (release.status in DEPLOYING) return listOf(Problem(deploying, null))
+        if (release.status !in DEPLOY_ENDED) return emptyList()
+        val endedMillis = runCatching { Instant.parse(release.updatedAt).toEpochMilliseconds() }.getOrNull() ?: 0
+        if (endedMillis <= sinceMillis && deploying !in before?.seen.orEmpty()) return emptyList()
+        return listOf(
+            Problem(
+                fingerprint(app.name, "deploy", release.version.toString(), release.status),
+                FlyAlert.Deploy(app.name, app.organization.slug, release),
+            ),
+        )
+    }
+
     private class Look(
         val machines: List<FlyMachine>,
         val hostIssues: List<FlyHostIssue>,
     )
 
+    /** Something seen, under its [mark]; with no [alert], only noted for the next look. */
     private class Problem(
         val mark: String,
-        val alert: FlyAlert,
+        val alert: FlyAlert?,
     )
 
     private companion object {
@@ -299,6 +332,12 @@ class FlyWatch(
          * organization that needs a payment method to keep running Machines, as `fly launch` puts it.
          */
         val BILLING_PROBLEMS = setOf("PAST_DUE", "DELINQUENT", "SUSPENDED", "SOURCE_REQUIRED", "TRIAL_ENDED")
+
+        /** Release statuses while flyctl is deploying it. */
+        val DEPLOYING = setOf("pending", "running")
+
+        /** Release statuses once a deploy is over, for better or worse. */
+        val DEPLOY_ENDED = setOf("complete", "failed", "interrupted")
     }
 }
 
@@ -361,39 +400,63 @@ sealed class FlyAlert {
         override val key get() = "incident:$id"
     }
 
+    /** Something about one app, in the organization [org]. */
+    sealed interface OfApp {
+        val app: String
+        val org: String
+    }
+
     /** A problem on a host under some of [app]'s machines. */
     class HostIssue(
-        val app: String,
+        override val app: String,
+        override val org: String,
         val issue: FlyHostIssue,
-    ) : FlyAlert() {
+    ) : FlyAlert(),
+        OfApp {
         override val key get() = "host:$app:${issue.internalId}"
     }
 
     /** A machine Fly.io couldn't create or start. */
     class MachineFailed(
-        val app: String,
+        override val app: String,
+        override val org: String,
         val machine: FlyMachine,
-    ) : FlyAlert() {
+    ) : FlyAlert(),
+        OfApp {
         override val key get() = "machine:$app:${machine.id}"
     }
 
     /** A started machine whose [checks] have been critical for two looks running. */
     class ChecksFailing(
-        val app: String,
+        override val app: String,
+        override val org: String,
         val machine: FlyMachine,
         val checks: List<String>,
-    ) : FlyAlert() {
+    ) : FlyAlert(),
+        OfApp {
         override val key get() = "checks:$app:${machine.id}"
     }
 
     /** A machine that exited on its own with [exitCode], or [oomKilled]. */
     class MachineCrashed(
-        val app: String,
+        override val app: String,
+        override val org: String,
         val machine: FlyMachine,
         val exitCode: Int?,
         val oomKilled: Boolean,
-    ) : FlyAlert() {
+    ) : FlyAlert(),
+        OfApp {
         override val key get() = "machine:$app:${machine.id}"
+    }
+
+    /** A deploy of [app] that ended since the last look, as [release]'s status says: `complete`, `failed` or `interrupted`. */
+    class Deploy(
+        override val app: String,
+        override val org: String,
+        val release: FlyRelease,
+    ) : FlyAlert(),
+        OfApp {
+        override val key get() = "deploy:$app"
     }
 
     /** An organization whose billing [status] is one of the problems, such as `PAST_DUE`. */

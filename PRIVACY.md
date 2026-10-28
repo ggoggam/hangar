@@ -24,8 +24,8 @@ check this in the code at <https://github.com/ggoggam/hangar>.
   token.
 
 If you turn on background checks in Settings, the app makes the same requests to the same hosts
-while it isn't open, to notify you of Fly.io incidents, problems with your apps, and billing
-problems or spend over an amount you set. The
+while it isn't open, to notify you of Fly.io incidents, problems with your apps, deploys that finish or fail, and
+billing problems or spend over an amount you set. The
 notifications come from your device; no push service or server is involved.
 
 Every request is sent over HTTPS. Fly.io handles what it receives under its own privacy policy, at

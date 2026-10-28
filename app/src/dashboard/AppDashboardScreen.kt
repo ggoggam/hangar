@@ -47,7 +47,7 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
-private enum class DashboardTab(
+enum class DashboardTab(
     val label: StringResource,
 ) {
     Overview(Res.string.tab_overview),
@@ -61,9 +61,10 @@ private enum class DashboardTab(
 fun AppDashboardScreen(
     vm: AppDashboardViewModel,
     onBack: () -> Unit,
+    initialTab: DashboardTab = DashboardTab.Overview,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(initialTab.ordinal) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     // Each action's outcome, one after another.

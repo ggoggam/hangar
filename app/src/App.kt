@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.ggoggam.hangar.app.apps.AppsScreen
 import dev.ggoggam.hangar.app.dashboard.AppDashboardScreen
+import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.login.LoginScreen
 import dev.ggoggam.hangar.app.navigation.HomeBar
 import dev.ggoggam.hangar.app.navigation.HomeTab
@@ -45,11 +46,14 @@ import dev.ggoggam.hangar.app.status.IncidentBanner
 import dev.ggoggam.hangar.app.status.IncidentFeed
 import dev.ggoggam.hangar.app.storage.StorageScreen
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
+import dev.ggoggam.hangar.app.watch.NotificationLink
+import dev.ggoggam.hangar.app.watch.NotificationLinks
 import dev.ggoggam.hangar.app.watch.WatchSettings
 import dev.ggoggam.hangar.app.watch.keepScheduled
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlySession
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -137,7 +141,23 @@ fun App() {
                         composable<Route.Regions> { RegionsScreen(koinViewModel(), onBack = { nav.popBackStack() }) }
                         composable<Route.App> { entry ->
                             val route = entry.toRoute<Route.App>()
-                            AppDashboardScreen(koinViewModel { parametersOf(route.name, route.org) }, onBack = { nav.popBackStack() })
+                            AppDashboardScreen(
+                                koinViewModel { parametersOf(route.name, route.org) },
+                                onBack = { nav.popBackStack() },
+                                initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
+                            )
+                        }
+                    }
+                }
+
+                // A tapped notification's screen, once the graph above is set up: now, or when the app starts.
+                val links = koinInject<NotificationLinks>()
+                LaunchedEffect(links, nav) {
+                    links.pending.filterNotNull().collect {
+                        when (val link = links.take()) {
+                            NotificationLink.Apps -> nav.openTab(HomeTab.Apps)
+                            is NotificationLink.App -> nav.navigate(Route.App(link.name, link.org, link.tab)) { popUpTo<Route.Apps>() }
+                            null -> Unit
                         }
                     }
                 }

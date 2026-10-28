@@ -35,6 +35,7 @@ import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Receipt
+import com.composables.icons.lucide.Rocket
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
@@ -142,6 +143,7 @@ private fun Notifications(watch: WatchSettings) {
     val on by watch.enabled.collectAsStateWithLifecycle()
     val incidents by watch.incidents.collectAsStateWithLifecycle()
     val apps by watch.apps.collectAsStateWithLifecycle()
+    val deploys by watch.deploys.collectAsStateWithLifecycle()
     val billing by watch.billing.collectAsStateWithLifecycle()
     val budget by watch.budget.collectAsStateWithLifecycle()
     var editBudget by remember { mutableStateOf(false) }
@@ -186,6 +188,15 @@ private fun Notifications(watch: WatchSettings) {
             onClick = { watch.setApps(!apps) },
         ) {
             Switch(checked = apps, onCheckedChange = null)
+        }
+        RowDivider()
+        SettingRow(
+            stringResource(Res.string.settings_notify_deploys),
+            icon = Lucide.Rocket,
+            detail = stringResource(Res.string.settings_notify_deploys_detail),
+            onClick = { watch.setDeploys(!deploys) },
+        ) {
+            Switch(checked = deploys, onCheckedChange = null)
         }
         RowDivider()
         SettingRow(

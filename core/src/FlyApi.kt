@@ -163,7 +163,8 @@ class FlyApi(
     private companion object {
         // Each query is named, as fly-go's generated ones are; the demo answers them by name.
 
-        // fly-go's getAppsPage, trimmed to what the app shows.
+        // fly-go's getAppsPage, trimmed to what the app shows, with each app's latest release in any
+        // state, which the background check reads for deploys that finished or failed.
         const val OVERVIEW_QUERY = """
             query Overview(${'$'}after: String) {
               viewer { email }
@@ -175,6 +176,7 @@ class FlyApi(
                   status
                   organization { slug }
                   currentRelease { createdAt status }
+                  latestRelease: currentReleaseUnprocessed { version status createdAt updatedAt user { email } }
                 }
               }
             }
@@ -309,6 +311,8 @@ class FlyApp(
     val deployed: Boolean = false,
     val organization: FlyOrganization,
     val currentRelease: FlyRelease? = null,
+    /** The latest release whatever its status, a deploy still running included; only from the app list. */
+    val latestRelease: FlyRelease? = null,
 )
 
 @Serializable
@@ -454,6 +458,7 @@ class FlyRelease(
     val imageRef: String = "",
     val stable: Boolean = false,
     val user: FlyUser? = null,
+    val updatedAt: String = "",
 )
 
 @Serializable

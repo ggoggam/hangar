@@ -236,6 +236,7 @@ private class FlyDemo(
                         "status" to app.status,
                         "organization" to mapOf("slug" to app.org.slug),
                         "currentRelease" to mapOf("createdAt" to releasedAt(app, app.releases), "status" to "complete"),
+                        "latestRelease" to release(app, app.releases),
                     )
                 },
         )
@@ -256,6 +257,7 @@ private class FlyDemo(
             "stable" to !failed,
             "user" to mapOf("email" to if (version % 3 == 0) "sam@example.com" else EMAIL),
             "createdAt" to releasedAt(app, version),
+            "updatedAt" to releasedAt(app, version),
         )
     }
 

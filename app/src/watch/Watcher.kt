@@ -1,5 +1,6 @@
 package dev.ggoggam.hangar.app.watch
 
+import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.core.FlyAlert
@@ -58,6 +59,7 @@ class Watcher(
                 when (alert) {
                     is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> settings.incidents.value
                     is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> settings.billing.value
+                    is FlyAlert.Deploy -> settings.deploys.value
                     else -> settings.apps.value
                 }
             if (wanted) notifier.post(notification(alert))
@@ -79,6 +81,7 @@ class Watcher(
             when (alert) {
                 is FlyAlert.IncidentOpened, is FlyAlert.IncidentResolved -> Incidents
                 is FlyAlert.BillingProblem, is FlyAlert.OverBudget -> Billing
+                is FlyAlert.Deploy -> Deploys
                 else -> Apps
             }
         val (title, body) =
@@ -134,8 +137,36 @@ class Watcher(
                             getString(Res.string.notify_crashed_body, machine(alert.machine), alert.exitCode?.toString() ?: "?")
                     }
                 }
+
+                is FlyAlert.Deploy -> {
+                    val release = alert.release
+                    val by = release.user?.email?.takeIf { it.isNotEmpty() }
+                    if (release.status == "complete") {
+                        getString(Res.string.notify_deployed_title, alert.app, release.version) to
+                            (by?.let { getString(Res.string.notify_deploy_by, it) } ?: "")
+                    } else {
+                        val interrupted = release.status == "interrupted"
+                        val failedTitle =
+                            if (interrupted) Res.string.notify_deploy_interrupted_title else Res.string.notify_deploy_failed_title
+                        val failedBody = by?.let { getString(Res.string.notify_deploy_failed_body, it) }
+                        getString(failedTitle, alert.app, release.version) to
+                            (failedBody ?: getString(Res.string.notify_deploy_failed_body_anonymous))
+                    }
+                }
             }
-        return HangarNotification(alert.key, channel.first, getString(channel.second), title, body)
+        return HangarNotification(alert.key, channel.first, getString(channel.second), title, body, link(alert))
+    }
+
+    /** The screen that says more: the app's tab where the problem shows, else the app list. */
+    private fun link(alert: FlyAlert): NotificationLink {
+        if (alert !is FlyAlert.OfApp) return NotificationLink.Apps
+        val tab =
+            when (alert) {
+                is FlyAlert.HostIssue -> DashboardTab.Overview
+                is FlyAlert.Deploy -> DashboardTab.Releases
+                else -> DashboardTab.Machines
+            }
+        return NotificationLink.App(alert.app, alert.org, tab.name)
     }
 
     /** A machine as the Machines tab names it: its name and region, else its id. */
@@ -146,5 +177,6 @@ class Watcher(
         val Incidents = NotificationChannel.Incidents to Res.string.channel_incidents
         val Apps = NotificationChannel.Apps to Res.string.channel_apps
         val Billing = NotificationChannel.Billing to Res.string.channel_billing
+        val Deploys = NotificationChannel.Deploys to Res.string.channel_deploys
     }
 }

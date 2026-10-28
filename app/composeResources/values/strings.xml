@@ -189,6 +189,8 @@
     <string name="settings_notify_incidents_detail">When an incident opens or resolves</string>
     <string name="settings_notify_apps">App problems</string>
     <string name="settings_notify_apps_detail">Failed or crashed machines, failing checks, host issues</string>
+    <string name="settings_notify_deploys">Deploys</string>
+    <string name="settings_notify_deploys_detail">When a deploy finishes, fails or is interrupted</string>
     <string name="settings_notify_billing">Billing</string>
     <string name="settings_notify_billing_detail">Payments due or failed, and spend over your alert</string>
     <string name="settings_spend_alert">Spend alert</string>
@@ -213,6 +215,7 @@
     <string name="notify_spend_body">Over your %1$s spend alert, at the last 2 days' rate, estimated from Fly.io's metrics at list prices.</string>
     <string name="channel_incidents">Fly.io incidents</string>
     <string name="channel_apps">Problems with your apps</string>
+    <string name="channel_deploys">Deploys</string>
     <string name="channel_account">Account</string>
     <string name="notify_incident_title">Fly.io incident: %1$s</string>
     <string name="notify_incident_body">Fly.io is investigating.</string>
@@ -227,6 +230,12 @@
     <string name="notify_crashed_body">%1$s exited with code %2$s.</string>
     <string name="notify_oom_title">%1$s: out of memory</string>
     <string name="notify_oom_body">%1$s ran out of memory and was stopped.</string>
+    <string name="notify_deployed_title">%1$s: v%2$d deployed</string>
+    <string name="notify_deploy_failed_title">%1$s: v%2$d failed to deploy</string>
+    <string name="notify_deploy_interrupted_title">%1$s: v%2$d deploy interrupted</string>
+    <string name="notify_deploy_by">Deployed by %1$s</string>
+    <string name="notify_deploy_failed_body">Started by %1$s. Some machines may still be on the previous release.</string>
+    <string name="notify_deploy_failed_body_anonymous">Some machines may still be on the previous release.</string>
     <string name="notify_signed_out_title">Hangar was signed out</string>
     <string name="notify_signed_out_body">Fly.io no longer accepts this login, so background checks have stopped. Open Hangar to sign in again.</string>
 </resources>
