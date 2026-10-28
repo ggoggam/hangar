@@ -20,16 +20,23 @@ import dev.ggoggam.hangar.app.ui.releaseTone
 import dev.ggoggam.hangar.core.FlyRelease
 import org.jetbrains.compose.resources.stringResource
 
-internal fun LazyListScope.releases(releases: Load<List<FlyRelease>>) {
+/** The latest releases, as `fly releases` lists them; tapping one opens it with [onOpen]. */
+internal fun LazyListScope.releases(
+    releases: Load<List<FlyRelease>>,
+    onOpen: (FlyRelease) -> Unit,
+) {
     section(releases, "releases", placeholders = 3) { list ->
         if (list.isEmpty()) item(key = "releases:empty") { Muted(stringResource(Res.string.releases_empty)) }
-        items(list, key = { "release:${it.id.ifEmpty { it.version.toString() }}" }) { ReleaseRow(it) }
+        items(list, key = { "release:${it.id.ifEmpty { it.version.toString() }}" }) { ReleaseRow(it, onOpen) }
     }
 }
 
 @Composable
-private fun ReleaseRow(release: FlyRelease) {
-    Panel {
+private fun ReleaseRow(
+    release: FlyRelease,
+    onOpen: (FlyRelease) -> Unit,
+) {
+    Panel(onClick = { onOpen(release) }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("v${release.version}", style = MaterialTheme.typography.titleMedium)
             Text(

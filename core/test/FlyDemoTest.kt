@@ -56,6 +56,46 @@ class FlyDemoTest {
         }
 
     @Test
+    fun hasAMachineThatRanOutOfMemory() =
+        runTest {
+            val machines = FlyMachines(http, token)
+            val listed = machines.machines("api").single { m -> m.events.any { it.oomKilled } }
+            val m = machines.machine("api", listed.id)
+
+            assertEquals("critical", m.checks.single().status)
+            assertTrue(
+                m.checks
+                    .single()
+                    .output
+                    .isNotEmpty(),
+            )
+            val exit = m.events.first { it.type == "exit" }
+            assertTrue(exit.oomKilled)
+            assertEquals(137, exit.exitCode)
+            assertTrue(m.privateIp.startsWith("fdaa:"))
+            assertEquals(26, m.instanceId.length)
+            assertEquals(
+                listOf("80", "443"),
+                m.config
+                    ?.services
+                    ?.single()
+                    ?.ports
+                    ?.map { it.label },
+            )
+            // Restarting it brings its check back.
+            FlyMachineActions(http, token).restartMachine("api", m.id)
+            assertEquals(
+                "passing",
+                machines
+                    .machine("api", m.id)
+                    .checks
+                    .single()
+                    .status,
+            )
+            assertFailsWith<FlyApiException.Failed> { machines.machine("api", "nope") }
+        }
+
+    @Test
     fun answersEveryDashboardTab() =
         runTest {
             val api = FlyApi(http, token)

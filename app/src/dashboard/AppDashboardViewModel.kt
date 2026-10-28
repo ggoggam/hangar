@@ -93,6 +93,8 @@ data class DashboardState(
     val certificates: Load<List<FlyCertificate>> = Load.Loading,
     val secrets: Load<List<FlySecret>> = Load.Loading,
     val metrics: Load<FlyAppMetrics> = Load.Loading,
+    /** The machines open on their own screen, by id, each as `fly machine status` reads it. */
+    val machineDetails: Map<String, Load<FlyMachine>> = emptyMap(),
     val window: MetricsWindow = MetricsWindow.Hour,
     val refreshing: Boolean = false,
     /** The machines an action is under way on, by id. */
@@ -152,7 +154,8 @@ data class LogsState(
 
 /**
  * One app's dashboard: `fly status`, `fly incidents hosts list`, `fly machines list`, `fly releases`,
- * `fly secrets list` and `fly logs` in one place.
+ * `fly secrets list` and `fly logs` in one place. The machine and release screens opened from it
+ * share it, so they start from what it has loaded.
  */
 class AppDashboardViewModel(
     val appName: String,
@@ -201,7 +204,27 @@ class AppDashboardViewModel(
             load({ FlyMachines(http, it).certificates(appName) }, { it.certificates }) { s, v -> s.copy(certificates = v) },
             load({ FlyMachines(http, it).secrets(appName) }, { it.secrets }) { s, v -> s.copy(secrets = v) },
             loadMetrics(),
-        )
+        ) +
+            _state.value.machineDetails.keys
+                .map(::loadMachine)
+
+    /**
+     * Loads [id] on its own, for its screen, which shows what the machine list has of it until then.
+     * Reloads with the rest of the dashboard until [closeMachine].
+     */
+    fun openMachine(id: String) {
+        if (session.token.value == null) return
+        _state.update { s -> if (id in s.machineDetails) s else s.copy(machineDetails = s.machineDetails + (id to Load.Loading)) }
+        loadMachine(id)
+    }
+
+    fun closeMachine(id: String) = _state.update { it.copy(machineDetails = it.machineDetails - id) }
+
+    // Dropped if its screen closed while it loaded.
+    private fun loadMachine(id: String) =
+        load({ FlyMachines(http, it).machine(appName, id) }, { it.machineDetails[id] ?: Load.Loading }) { s, v ->
+            if (id in s.machineDetails) s.copy(machineDetails = s.machineDetails + (id to v)) else s
+        }
 
     fun setWindow(window: MetricsWindow) {
         if (window == _state.value.window) return

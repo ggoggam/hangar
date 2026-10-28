@@ -75,3 +75,10 @@ fun clockTime(instant: Instant): String {
     fun two(n: Int) = n.toString().padStart(2, '0')
     return "${two(t.hour)}:${two(t.minute)}:${two(t.second)}"
 }
+
+/** The local date and wall-clock time of [instant], as `2026-10-28 14:03:27`. */
+fun dateTime(instant: Instant): String = "${instant.toLocalDateTime(TimeZone.currentSystemDefault()).date} ${clockTime(instant)}"
+
+/** When [iso] was, as its local date and time and how long ago, or empty when it doesn't parse. */
+@Composable
+fun dateTimeAgo(iso: String?): String = instantOf(iso)?.let { "${dateTime(it)} · ${ago(it)}" }.orEmpty()

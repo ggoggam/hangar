@@ -35,4 +35,20 @@ sealed interface Route {
         val org: String,
         val tab: String? = null,
     ) : Route
+
+    /** One of [app]'s machines, opened from its dashboard, which it shares. */
+    @Serializable
+    data class Machine(
+        val app: String,
+        val org: String,
+        val id: String,
+    ) : Route
+
+    /** One of [app]'s releases, opened from its dashboard, which it shares. */
+    @Serializable
+    data class Release(
+        val app: String,
+        val org: String,
+        val version: Int,
+    ) : Route
 }

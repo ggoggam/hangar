@@ -2,6 +2,7 @@ package dev.ggoggam.hangar.app.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,16 +111,18 @@ internal fun LazyListScope.overview(
     }
 }
 
-/** A bordered box, the dashboard's card. */
+/** A bordered box, the dashboard's card; with [onClick], it opens something. */
 @Composable
 internal fun Panel(
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -226,10 +229,12 @@ private fun AppCard(
 }
 
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     selectable: Boolean = false,
+    /** For ids, addresses and image refs. */
+    monospace: Boolean = false,
 ) {
     Row(verticalAlignment = Alignment.Top) {
         Text(
@@ -238,7 +243,10 @@ private fun Field(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.38f),
         )
-        val text = @Composable { Text(value, style = MaterialTheme.typography.bodyMedium) }
+        val text =
+            @Composable {
+                Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = if (monospace) FontFamily.Monospace else null)
+            }
         Box(Modifier.weight(0.62f)) { if (selectable) SelectionContainer { text() } else text() }
     }
 }

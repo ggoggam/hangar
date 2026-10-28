@@ -16,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.ggoggam.hangar.app.apps.AppsScreen
 import dev.ggoggam.hangar.app.dashboard.AppDashboardScreen
+import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.dashboard.DashboardTab
+import dev.ggoggam.hangar.app.dashboard.MachineScreen
+import dev.ggoggam.hangar.app.dashboard.ReleaseScreen
 import dev.ggoggam.hangar.app.login.LoginScreen
 import dev.ggoggam.hangar.app.navigation.HomeBar
 import dev.ggoggam.hangar.app.navigation.HomeTab
@@ -145,6 +149,21 @@ fun App() {
                                 koinViewModel { parametersOf(route.name, route.org) },
                                 onBack = { nav.popBackStack() },
                                 initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
+                                onMachine = { nav.navigate(Route.Machine(route.name, route.org, it.id)) },
+                                onRelease = { nav.navigate(Route.Release(route.name, route.org, it.version)) },
+                            )
+                        }
+                        composable<Route.Machine> { entry ->
+                            val route = entry.toRoute<Route.Machine>()
+                            MachineScreen(dashboardUnder(nav, entry, route.app, route.org), route.id, onBack = { nav.popBackStack() })
+                        }
+                        composable<Route.Release> { entry ->
+                            val route = entry.toRoute<Route.Release>()
+                            ReleaseScreen(
+                                dashboardUnder(nav, entry, route.app, route.org),
+                                route.version,
+                                onBack = { nav.popBackStack() },
+                                onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
                             )
                         }
                     }
@@ -164,6 +183,22 @@ fun App() {
             }
         }
     }
+}
+
+/**
+ * The view model of the dashboard under [entry], the one it was opened from, so a machine or
+ * release screen starts from what the dashboard loaded and shares its actions. Nothing opened
+ * from a dashboard opens another, so the topmost dashboard is that one.
+ */
+@Composable
+private fun dashboardUnder(
+    nav: NavController,
+    entry: NavBackStackEntry,
+    app: String,
+    org: String,
+): AppDashboardViewModel {
+    val owner = remember(entry) { runCatching { nav.getBackStackEntry<Route.App>() }.getOrDefault(entry) }
+    return koinViewModel(viewModelStoreOwner = owner) { parametersOf(app, org) }
 }
 
 private val Slide = tween<IntOffset>(300, easing = FastOutSlowInEasing)
