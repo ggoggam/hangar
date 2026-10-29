@@ -7,6 +7,8 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** An HTTP client that answers each request with the next of [responses] and records the requests. */
 internal class MockFly(
@@ -15,11 +17,18 @@ internal class MockFly(
     val requests = mutableListOf<HttpRequestData>()
     private val queue = ArrayDeque(responses.toList())
 
+    // Clients that send calls at once (metrics, usage, watch) get them answered on several threads,
+    // so the list and the queue are only touched under the lock.
+    private val lock = Mutex()
+
     val http =
         HttpClient(
             MockEngine { request ->
-                requests += request
-                val (status, body) = queue.removeFirst()
+                val (status, body) =
+                    lock.withLock {
+                        requests += request
+                        queue.removeFirst()
+                    }
                 respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
             },
         )

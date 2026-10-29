@@ -6,6 +6,8 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
 import kotlin.test.Test
@@ -39,7 +41,10 @@ class FlyUsageTest {
     fun estimatesFromRunningTimeDataOutAndVolumes() =
         runTest {
             val now = 1_800_000_000L
+            // FlyUsage sends its queries at once and the mock engine answers them on several threads,
+            // so the list is only touched under the lock, or an add can be lost.
             val queries = mutableListOf<String>()
+            val queriesLock = Mutex()
             val http =
                 HttpClient(
                     MockEngine { request ->
@@ -48,7 +53,7 @@ class FlyUsageTest {
                             when {
                                 url.encodedPath.endsWith("/api/v1/query") -> {
                                     val q = url.parameters["query"].orEmpty()
-                                    queries += q
+                                    queriesLock.withLock { queries += q }
                                     val seconds = Regex("""\[(\d+)s""").find(q)!!.groupValues[1].toLong()
                                     val latest = url.parameters["time"] == "$now"
                                     if ("fly_instance_info" in q) {
