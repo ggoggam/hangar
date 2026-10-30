@@ -19,19 +19,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Building2
 import com.composables.icons.lucide.CircleDollarSign
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.HardDrive
+import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Moon
@@ -42,6 +46,8 @@ import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.lock.AppLock
+import dev.ggoggam.hangar.app.session.rememberDeviceAuth
 import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
@@ -50,12 +56,13 @@ import dev.ggoggam.hangar.app.watch.checksDetail
 import dev.ggoggam.hangar.app.watch.rememberNotificationPermission
 import dev.ggoggam.hangar.core.FlyOrganization
 import dev.ggoggam.hangar.core.FlyVolume
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /**
  * The account, organizations and platform as flyctl's `auth`, `orgs` and `platform` commands show
- * them, background checks, the theme, and signing out.
+ * them, background checks, the app lock, the theme, and signing out.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,6 +130,12 @@ fun SettingsScreen(
 
             if (checks.supported) {
                 item(key = "notifications") { Notifications(watch) }
+            }
+
+            item(key = "security") {
+                Header(stringResource(Res.string.settings_security))
+                LockSwitch(koinInject())
+                RowDivider()
             }
 
             item(key = "appearance") {
@@ -233,6 +246,47 @@ private fun Notifications(watch: WatchSettings) {
             )
             RowDivider()
         }
+    }
+}
+
+/**
+ * The app lock's switch, which asks the user to authenticate as it turns the lock on, so it's never
+ * on for someone who can't get past it. Off and greyed out while the device has no screen lock.
+ */
+@Composable
+private fun LockSwitch(lock: AppLock) {
+    val on by lock.on.collectAsStateWithLifecycle()
+    val auth = rememberDeviceAuth()
+    // Asked again each time the app comes back, so a screen lock set meanwhile in system settings counts.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val state by lifecycle.currentStateFlow.collectAsState()
+    val available = remember(auth, state) { auth.available }
+    val scope = rememberCoroutineScope()
+    val reason = stringResource(Res.string.lock_reason_turn_on)
+    var asking by remember { mutableStateOf(false) }
+    val toggle: () -> Unit = {
+        if (on) {
+            lock.turnOff()
+        } else if (!asking) {
+            asking = true
+            scope.launch {
+                try {
+                    lock.turnOn(auth, reason)
+                } finally {
+                    asking = false
+                }
+            }
+        }
+    }
+    // Once on, it can always be turned off, even with the screen lock since removed.
+    val usable = on || available
+    SettingRow(
+        stringResource(Res.string.settings_lock),
+        icon = Lucide.Lock,
+        detail = stringResource(if (usable) Res.string.settings_lock_detail else Res.string.settings_lock_unavailable),
+        onClick = toggle.takeIf { usable },
+    ) {
+        Switch(checked = on, onCheckedChange = null, enabled = usable)
     }
 }
 

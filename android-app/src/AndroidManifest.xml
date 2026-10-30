@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: asked for when background checks are turned on in Settings. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The app lock in Settings: the system's face, fingerprint or screen lock prompt. Granted at install. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!-- Package visibility (Android 11+): lets Custom Tabs find a browser that supports them. -->
     <queries>

@@ -316,6 +316,14 @@
     <string name="settings_spend_alert">지출 알림</string>
     <string name="settings_spend_alert_on">조직의 한 달 지출이 %1$s를 넘을 것 같을 때</string>
     <string name="settings_spend_alert_off">끔</string>
+    <string name="settings_security">보안</string>
+    <string name="settings_lock">Hangar 잠금</string>
+    <string name="settings_lock_detail">Hangar를 열 때 Face ID, 지문 또는 기기 암호를 확인해요</string>
+    <string name="settings_lock_unavailable">먼저 휴대폰 설정에서 화면 잠금을 설정해 주세요</string>
+    <string name="lock_title">Hangar가 잠겨 있어요</string>
+    <string name="lock_unlock">잠금 해제</string>
+    <string name="lock_reason_unlock">Hangar 잠금 해제</string>
+    <string name="lock_reason_turn_on">Hangar를 잠그려면 본인인지 확인해 주세요</string>
     <string name="spend_alert_title">지출 알림</string>
     <string name="spend_alert_body">최근 2일 사용 속도로 조직의 한 달 지출이 이 금액을 넘을 것 같으면 알려 드려요. 하루에 약 4번 확인해요.</string>
     <string name="spend_alert_label">한 달 금액(달러)</string>

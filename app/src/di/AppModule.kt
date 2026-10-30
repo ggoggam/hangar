@@ -4,6 +4,7 @@ import dev.ggoggam.hangar.app.apps.AppPins
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.dashboard.CertificateViewModel
+import dev.ggoggam.hangar.app.lock.AppLock
 import dev.ggoggam.hangar.app.login.LoginViewModel
 import dev.ggoggam.hangar.app.settings.OrganizationViewModel
 import dev.ggoggam.hangar.app.settings.RegionsViewModel
@@ -54,6 +55,8 @@ private val appModule =
         // Renewals on the main thread, where the screens sign in and out, so the token only changes there.
         single { FlySession(get(), get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
         single { ThemeSettings(get()) }
+        // A single, so the lock outlives an Android activity recreated for a rotation.
+        single { AppLock(get()) }
         single { WatchSettings(get()) }
         single { AppPins(get()) }
         single { NotificationLinks() }

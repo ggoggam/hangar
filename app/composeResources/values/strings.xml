@@ -316,6 +316,14 @@
     <string name="settings_spend_alert">Spend alert</string>
     <string name="settings_spend_alert_on">When an organization is on pace for more than %1$s a month</string>
     <string name="settings_spend_alert_off">Off</string>
+    <string name="settings_security">Security</string>
+    <string name="settings_lock">Lock Hangar</string>
+    <string name="settings_lock_detail">Ask for Face ID, a fingerprint or the device passcode when opening Hangar</string>
+    <string name="settings_lock_unavailable">Set a screen lock in your phone's settings first</string>
+    <string name="lock_title">Hangar is locked</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_reason_unlock">Unlock Hangar</string>
+    <string name="lock_reason_turn_on">Confirm it's you to lock Hangar</string>
     <string name="spend_alert_title">Spend alert</string>
     <string name="spend_alert_body">Notify me when an organization is on pace to pass this a month, at its last 2 days' rate. Checked about 4 times a day.</string>
     <string name="spend_alert_label">Dollars a month</string>

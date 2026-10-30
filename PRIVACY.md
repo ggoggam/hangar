@@ -1,6 +1,6 @@
 # Privacy policy
 
-Effective 28 October 2026.
+Effective 30 October 2026.
 
 Hangar is an unofficial mobile client for Fly.io, made by ggoggam (ggoggam.dev@gmail.com). It isn't
 made by or affiliated with Fly.io. This policy covers the Hangar app for Android and iOS.
@@ -34,12 +34,15 @@ Every request is sent over HTTPS. Fly.io handles what it receives under its own 
 Your password and your Google or GitHub sign-in never reach the app: you sign in on fly.io in your
 device's browser, and the app only receives the code Fly.io shows afterwards.
 
+If you turn on the app lock in Settings, your device checks your face, fingerprint or passcode
+itself and only tells the app whether it worked. None of them reach the app.
+
 ## What the app keeps on your device
 
 - Your Fly.io token: sealed under an Android Keystore key and left out of backups, or in the iOS
   Keychain for this device only, so it never moves to another device.
-- Whether you picked dark or light mode, which notifications you want, and the spend alert's
-  amount if you set one.
+- Whether you picked dark or light mode, which notifications you want, the spend alert's amount if
+  you set one, and whether the app lock is on.
 - For background checks, what the last check saw: the names of Fly.io's open incidents, which
   Fly.io publishes, and one-way fingerprints of the problems it has already told you about, which
   don't contain your app, machine, volume or organization names.
