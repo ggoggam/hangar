@@ -121,6 +121,11 @@ class FlyDemoTest {
             assertTrue(machines.volumes("api-db").none { it.nearlyFull })
             // One volume nearly full, for Overview's warning.
             assertTrue(machines.volumes("blog").single().nearlyFull)
+            // Each volume's screen lists its snapshots.
+            for (app in listOf("blog", "api-db")) {
+                for (volume in machines.volumes(app)) machines.volumeSnapshots(app, volume.id)
+            }
+            assertEquals(5, machines.volumeSnapshots("blog", "vol_r63w8m1oq0ze7p4v").size)
             assertEquals(2, machines.ips("web").size)
             assertEquals(FlyCertState.Issued, machines.certificates("web").first().state)
 
