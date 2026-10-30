@@ -12,6 +12,8 @@
     <string name="login_token_label">Access token</string>
     <string name="login_token_back">Sign in with the browser instead</string>
     <string name="login_demo">Try the demo</string>
+    <string name="add_account_title">Add an account</string>
+    <string name="add_account_tagline">Sign in to another Fly.io account. You can switch between them in Settings.</string>
     <string name="error_expired">That login expired. Start a new one.</string>
     <string name="error_bad_code">Fly.io didn't accept that code. Check it and try again.</string>
     <string name="error_bad_token">Fly.io didn't accept that token.</string>
@@ -263,6 +265,11 @@
     <string name="settings_account">Account</string>
     <string name="settings_sign_out">Sign out</string>
     <string name="settings_signed_in">Signed in as</string>
+    <string name="settings_add_account">Add account</string>
+    <string name="settings_add_account_detail">Sign in to another Fly.io account and switch between them</string>
+    <string name="settings_switch_account">Switch to this account</string>
+    <string name="account_demo">Demo</string>
+    <string name="account_unnamed">Fly.io account</string>
     <string name="settings_organizations">Organizations</string>
     <string name="settings_platform">Platform</string>
     <string name="settings_regions">Regions</string>
@@ -288,6 +295,8 @@
     <string name="geo_south_america">South America</string>
     <string name="sign_out_title">Sign out of Hangar?</string>
     <string name="sign_out_body">This removes your Fly.io token from this device. To come back, you'll sign in with the browser again.</string>
+    <string name="sign_out_account_title">Sign out of this account?</string>
+    <string name="sign_out_account_body">This removes this account's Fly.io token from this device, and Hangar switches to %1$s.</string>
     <string name="cancel">Cancel</string>
     <string name="usage_title">Last %1$d days</string>
     <string name="usage_title_org">Last %1$d days · %2$s</string>

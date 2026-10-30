@@ -14,6 +14,10 @@ sealed interface Route {
     @Serializable
     data object Settings : Route
 
+    /** Signing in to another account, opened from Settings. */
+    @Serializable
+    data object AddAccount : Route
+
     /** One organization's members and tokens. [name] titles the screen until the organization loads. */
     @Serializable
     data class Organization(

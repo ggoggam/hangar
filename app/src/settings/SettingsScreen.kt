@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Building2
 import com.composables.icons.lucide.CircleDollarSign
@@ -40,6 +41,7 @@ import com.composables.icons.lucide.Rocket
 import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Siren
 import com.composables.icons.lucide.User
+import com.composables.icons.lucide.UserPlus
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.ui.percent
@@ -48,6 +50,7 @@ import dev.ggoggam.hangar.app.watch.BackgroundChecks
 import dev.ggoggam.hangar.app.watch.WatchSettings
 import dev.ggoggam.hangar.app.watch.checksDetail
 import dev.ggoggam.hangar.app.watch.rememberNotificationPermission
+import dev.ggoggam.hangar.core.FlyAccount
 import dev.ggoggam.hangar.core.FlyOrganization
 import dev.ggoggam.hangar.core.FlyVolume
 import org.jetbrains.compose.resources.stringResource
@@ -55,7 +58,7 @@ import org.koin.compose.koinInject
 
 /**
  * The account, organizations and platform as flyctl's `auth`, `orgs` and `platform` commands show
- * them, background checks, the theme, and signing out.
+ * them, the other accounts on this device, background checks, the theme, and signing out.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,16 +66,19 @@ fun SettingsScreen(
     vm: SettingsViewModel,
     onOrganization: (FlyOrganization) -> Unit,
     onRegions: () -> Unit,
+    onAddAccount: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val accounts by vm.accounts.collectAsStateWithLifecycle()
+    val others = accounts.filterNot { it.current }
     val theme = koinInject<ThemeSettings>()
     val dark = theme.dark.collectAsStateWithLifecycle().value ?: isSystemInDarkTheme()
     val checks = koinInject<BackgroundChecks>()
     val watch = koinInject<WatchSettings>()
     var confirmSignOut by remember { mutableStateOf(false) }
     if (confirmSignOut) {
-        SignOutDialog(onConfirm = vm::signOut, onDismiss = { confirmSignOut = false })
+        SignOutDialog(next = others.firstOrNull(), onConfirm = vm::signOut, onDismiss = { confirmSignOut = false })
     }
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) },
@@ -85,6 +91,25 @@ fun SettingsScreen(
                     SettingRow(stringResource(Res.string.settings_signed_in), icon = Lucide.User, detail = email)
                     RowDivider()
                 }
+            }
+            items(others, key = { "account:${it.id}" }) { account ->
+                SettingRow(
+                    accountLabel(account),
+                    icon = Lucide.ArrowLeftRight,
+                    detail = stringResource(Res.string.settings_switch_account),
+                    onClick = { vm.switchTo(account) },
+                )
+                RowDivider()
+            }
+            item(key = "add-account") {
+                SettingRow(
+                    stringResource(Res.string.settings_add_account),
+                    icon = Lucide.UserPlus,
+                    detail = stringResource(Res.string.settings_add_account_detail),
+                    onClick = onAddAccount,
+                    chevron = true,
+                )
+                RowDivider()
             }
             item(key = "sign-out") {
                 SettingRow(
@@ -295,16 +320,28 @@ private fun BudgetDialog(
 /** [value] as typed back into the field: `50`, not `50.0`. */
 private fun decimalText(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
-/** Asks before signing out, since signing in again means the browser and a code. */
+/**
+ * Asks before signing out, since signing in again means the browser and a code, and says which
+ * account comes [next], if there's another.
+ */
 @Composable
 private fun SignOutDialog(
+    next: FlyAccount?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.sign_out_title)) },
-        text = { Text(stringResource(Res.string.sign_out_body)) },
+        title = { Text(stringResource(if (next == null) Res.string.sign_out_title else Res.string.sign_out_account_title)) },
+        text = {
+            Text(
+                if (next == null) {
+                    stringResource(Res.string.sign_out_body)
+                } else {
+                    stringResource(Res.string.sign_out_account_body, accountLabel(next))
+                },
+            )
+        },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(Res.string.settings_sign_out), color = LocalStatusColors.current.error)
@@ -314,6 +351,11 @@ private fun SignOutDialog(
         containerColor = MaterialTheme.colorScheme.surface,
     )
 }
+
+/** What the account switcher calls [account]: its email or organization, or what it is. */
+@Composable
+private fun accountLabel(account: FlyAccount): String =
+    account.label ?: stringResource(if (account.demo) Res.string.account_demo else Res.string.account_unnamed)
 
 /** The label for an organization type, `PERSONAL` or `SHARED`, else Fly.io's own word. */
 @Composable

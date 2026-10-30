@@ -65,6 +65,15 @@ The same browser login `fly auth login` runs, from `fly-go/cli_session.go` and f
 The token is stored sealed under an Android Keystore key, or in the iOS Keychain (this device
 only). `FlyToken` sends `FlyV1` for macaroons and `Bearer` for older tokens, as fly-go does.
 
+Settings can add another account, which goes through the same login, and switch between them.
+`FlySession` keeps every account's token in that one sealed slot, as JSON, with the account's
+email from `fly auth whoami` to tell them apart, or for a token without a user, its first
+organization's name. A token stored by an earlier version reads as one account. Signing in to an
+account that's already here, by its token or its email, renews it rather than adding it twice.
+Switching starts the screens afresh from the app list. Only the current account's discharges are
+renewed; the others' run out while they wait, and are renewed when they're switched to. Signing
+out, or Fly.io turning a login down, removes that account and switches to the next one.
+
 User tokens expire in minutes unless renewed. A token from `fly auth login` is a permission
 macaroon with a third-party caveat for `https://api.fly.io/aaa/v1`, plus a discharge for that
 caveat and an OAuth token (`fo1_`). The discharge lasts 10 minutes. Before most commands, flyctl
@@ -117,7 +126,7 @@ The bottom bar switches between the app list and three more screens:
 |---|---|
 | Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. Open incidents are listed at the top of the app list, and a dismissable banner runs across the top of every screen while any is open, as flyctl warns before its commands. Checked every minute while the app is in front. A link opens status.fly.io in the browser, as `fly platform status` does. |
 | Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). Tapping a Managed Postgres cluster opens what `fly mpg status` shows, from `api.machines.dev/v1/postgres/{id}` (fly-go's `GetManagedPostgresCluster`): size, Postgres version, replicas, disk usage, the direct and pooler hosts, and its attached apps, which open their dashboards. Then its databases, users and roles, and backups, from `/v1/postgres/{id}/databases`, `/users` and `/backups`, falling back where flyctl does to `api.fly.io/api/v1/postgresv2/{id}/…`, or `/api/v1/postgres/{id}/…` for a first-version cluster. For a cluster the Machines API doesn't have, flyctl reads `api.fly.io/api/v1/postgres/{id}`, whose answer carries a password and connection string, so Hangar takes the cluster's row from the organization's list instead. No password, connection string or credentials endpoint is ever asked for. |
-| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the background checks below, the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
+| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the other accounts signed in on this device, to switch to, adding one, the background checks below, the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
 
 The app list opens with an estimate of each organization's usage over the last 14 days, and each
 app's share under its name. Neither flyctl nor Fly.io's API reports bills, so Hangar works it out
@@ -140,7 +149,8 @@ flyctl, Hangar sends it every token under `Bearer` (`FlyToken.uiexHeader`).
 ## Notifications
 
 Turned on in Settings, Hangar checks Fly.io in the background and notifies you of what's new
-since it last looked (`core/src/FlyWatch.kt`). There's no push server: the phone itself asks
+since it last looked (`core/src/FlyWatch.kt`), for the account that's current. Switching
+accounts starts afresh, so the first check after a switch only takes note. There's no push server: the phone itself asks
 Fly.io, the same calls the screens make, and posts the notifications. On Android, WorkManager runs
 the check about every 15 minutes while there's a network, though Doze and battery saver can hold
 it back. On iOS it's a `BGAppRefreshTask`, asked for no sooner than 15 minutes apart, which iOS
@@ -204,14 +214,15 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
 - **What it sees.** Your password and your Google or GitHub sign-in never reach the app: you
   sign in on fly.io in the system's sign-in browser (Custom Tabs, ASWebAuthenticationSession),
   and the app only gets the code Fly.io shows afterwards.
-- **What it keeps.** The token, on the device: sealed under an Android Keystore key and
-  excluded from backups (`allowBackup="false"`), or in the iOS Keychain for this device only.
-  Signing out deletes it. Besides that, only whether you picked dark or light mode, which
+- **What it keeps.** The token of each account you sign in to, with the account's email (or for a
+  token without a user, its organization's name) to tell them apart, on the device: sealed under an
+  Android Keystore key and excluded from backups (`allowBackup="false"`), or in the iOS Keychain
+  for this device only. Signing out of an account deletes its token and email. Besides that, only whether you picked dark or light mode, which
   notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
   notified, never an app's, machine's, volume's or organization's name. The apps you pin to the top
-  of the list are kept the same way, as one-way fingerprints of their names (`FlyPins`). Your email, apps, logs, metrics, secrets' names, and Managed Postgres databases', users' and
+  of the list are kept the same way, as one-way fingerprints of their names (`FlyPins`). Your apps, logs, metrics, secrets' names, and Managed Postgres databases', users' and
   hosts' names are held in memory while they're on screen: the app never writes them to disk, logs
   them or sends them anywhere. It never asks Fly.io for a database password or connection string. A notification does name the app it's about, and the system keeps it until you
   dismiss it. Its HTTP clients
