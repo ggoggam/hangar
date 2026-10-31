@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Edge to edge before Android 15, which draws it this way regardless: transparent bars,
+         with the system's scrim behind three-button navigation, and the cutout drawn under too.
+         Here rather than in enableEdgeToEdge(), whose window colour calls Play flags as
+         deprecated in Android 15. MainActivity lays the content out under the bars. -->
+    <style name="Theme.Hangar" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+</resources>

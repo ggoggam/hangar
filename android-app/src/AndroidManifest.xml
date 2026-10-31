@@ -19,7 +19,7 @@
         android:name="dev.ggoggam.hangar.HangarApplication"
         android:label="Hangar"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:theme="@style/Theme.Hangar"
         android:allowBackup="false">
         <activity
             android:name="dev.ggoggam.hangar.MainActivity"
