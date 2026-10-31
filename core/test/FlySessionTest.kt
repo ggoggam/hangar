@@ -205,4 +205,79 @@ class FlySessionTest {
             assertNull(session.fresh())
             assertNull(session.token.value)
         }
+
+    @Test
+    fun aTokenFromBeforeAccountsIsOneAccount() =
+        runTest {
+            val session = session(good, discharger())
+
+            assertEquals(good, session.token.value)
+            assertEquals(listOf(true), session.accounts.value.map { it.current })
+        }
+
+    @Test
+    fun signingInAgainAddsAnAccountAndSwitchesToIt() =
+        runTest {
+            val store = MemoryStore(good.value)
+            val session = session(good, discharger(), store)
+            val other = FlyToken("fm2_other")
+
+            session.signIn(other, "other@example.com")
+
+            assertEquals(other, session.token.value)
+            assertEquals(listOf(null, "other@example.com"), session.accounts.value.map { it.label })
+            // Kept between launches, with the current account.
+            val relaunched = FlySession(store, FlyDischarges(discharger().http), backgroundScope) { now }
+            assertEquals(other, relaunched.token.value)
+
+            session.switchTo(
+                session.accounts.value
+                    .first()
+                    .id,
+            )
+            assertEquals(good, session.token.value)
+        }
+
+    @Test
+    fun signingInToAnAccountAlreadyHereRenewsIt() =
+        runTest {
+            val session = session(null, discharger())
+            session.signIn(FlyToken("fm2_first"), "me@example.com")
+            session.signIn(FlyToken("fm2_other"), "other@example.com")
+
+            session.signIn(FlyToken("fm2_again"), "me@example.com")
+
+            assertEquals(FlyToken("fm2_again"), session.token.value)
+            assertEquals(listOf("me@example.com", "other@example.com"), session.accounts.value.map { it.label })
+            assertEquals(listOf(true, false), session.accounts.value.map { it.current })
+        }
+
+    @Test
+    fun signingOutSwitchesToTheNextAccount() =
+        runTest {
+            val store = MemoryStore(null)
+            val session = session(null, discharger(), store)
+            session.signIn(FlyToken("fm2_first"), "me@example.com")
+            session.signIn(FlyToken("fm2_other"), "other@example.com")
+
+            session.signOut()
+            assertEquals(FlyToken("fm2_first"), session.token.value)
+            assertEquals(listOf("me@example.com"), session.accounts.value.map { it.label })
+
+            session.signOut()
+            assertNull(session.token.value)
+            assertNull(store.value)
+        }
+
+    @Test
+    fun anAccountFlyIoRefusesLeavesTheOthers() =
+        runTest {
+            val fly = Discharger(HttpStatusCode.Unauthorized, """{"error":"bad token"}""").also { it.open.complete(Unit) }
+            val session = session(null, fly)
+            session.signIn(FlyToken("fm2_other"), "other@example.com")
+            session.signIn(stale, "me@example.com")
+
+            assertEquals(FlyToken("fm2_other"), session.fresh())
+            assertEquals(listOf("other@example.com"), session.accounts.value.map { it.label })
+        }
 }

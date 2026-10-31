@@ -39,8 +39,12 @@ import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.session.rememberSignInSheet
 import org.jetbrains.compose.resources.stringResource
 
+/** Signing in, or with [onCancel], signing in to another account alongside the current one. */
 @Composable
-fun LoginScreen(vm: LoginViewModel) {
+fun LoginScreen(
+    vm: LoginViewModel,
+    onCancel: (() -> Unit)? = null,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val sheet = rememberSignInSheet()
 
@@ -56,9 +60,14 @@ fun LoginScreen(vm: LoginViewModel) {
         verticalArrangement = Arrangement.Center,
     ) {
         Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(Res.string.app_name), style = MaterialTheme.typography.displayLarge)
+            val adding = onCancel != null
             Text(
-                stringResource(Res.string.login_tagline),
+                stringResource(if (adding) Res.string.add_account_title else Res.string.app_name),
+                // The wordmark, or a heading that fits a phone's width.
+                style = if (adding) MaterialTheme.typography.displaySmall else MaterialTheme.typography.displayLarge,
+            )
+            Text(
+                stringResource(if (adding) Res.string.add_account_tagline else Res.string.login_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -90,6 +99,16 @@ fun LoginScreen(vm: LoginViewModel) {
                         onStartOver = vm::startOver,
                     )
                 }
+            }
+
+            if (onCancel != null) {
+                TextButton(
+                    onClick = {
+                        vm.startOver()
+                        onCancel()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(Res.string.cancel)) }
             }
 
             if (state.busy) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
