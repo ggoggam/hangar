@@ -151,8 +151,9 @@ private fun LazyListScope.releaseDetail(
     }
 }
 
+/** A machine by name, id and region, with its state; it opens the machine's screen. */
 @Composable
-private fun MachineLink(
+internal fun MachineLink(
     m: FlyMachine,
     onOpen: (FlyMachine) -> Unit,
 ) {

@@ -61,6 +61,7 @@ internal fun LazyListScope.overview(
     state: DashboardState,
     onWindow: (MetricsWindow) -> Unit,
     onRestartApp: (rolling: Boolean) -> Unit,
+    onVolume: (id: String) -> Unit,
     onCertificate: (hostname: String) -> Unit,
 ) {
     // Only when there are some: a quiet app shouldn't carry an empty warning, or a failed one.
@@ -95,7 +96,7 @@ internal fun LazyListScope.overview(
     section(state.volumes, "volumes") { volumes ->
         if (volumes.isNotEmpty()) {
             item(key = "volumes:title") { SectionTitle(stringResource(Res.string.volumes_title)) }
-            items(volumes, key = { "volume:${it.id}" }) { VolumeRow(it) }
+            items(volumes, key = { "volume:${it.id}" }) { VolumeRow(it) { onVolume(it.id) } }
         }
     }
     section(state.ips, "ips") { ips ->
@@ -348,12 +349,22 @@ private fun Metric(
     }
 }
 
+/** A volume, where it is and how full; it opens the volume and its snapshots. */
 @Composable
-private fun VolumeRow(volume: FlyVolume) {
-    Panel {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+private fun VolumeRow(
+    volume: FlyVolume,
+    onClick: () -> Unit,
+) {
+    Panel(onClick = onClick) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(volume.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             StatusBadge(volume.state, if (volume.state == "created") Tone.Ok else Tone.Warning)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
         Text(
             stringResource(

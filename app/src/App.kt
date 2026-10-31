@@ -39,6 +39,7 @@ import dev.ggoggam.hangar.app.dashboard.CertificateScreen
 import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.dashboard.MachineScreen
 import dev.ggoggam.hangar.app.dashboard.ReleaseScreen
+import dev.ggoggam.hangar.app.dashboard.VolumeScreen
 import dev.ggoggam.hangar.app.login.LoginScreen
 import dev.ggoggam.hangar.app.login.LoginViewModel
 import dev.ggoggam.hangar.app.navigation.HomeBar
@@ -189,6 +190,7 @@ private fun SignedIn() {
                     initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
                     onMachine = { nav.navigate(Route.Machine(route.name, route.org, it.id)) },
                     onRelease = { nav.navigate(Route.Release(route.name, route.org, it.version)) },
+                    onVolume = { nav.navigate(Route.Volume(route.name, route.org, it)) },
                     onCertificate = { nav.navigate(Route.Certificate(route.name, it)) },
                 )
             }
@@ -201,6 +203,15 @@ private fun SignedIn() {
                 ReleaseScreen(
                     dashboardUnder(nav, entry, route.app, route.org),
                     route.version,
+                    onBack = { nav.popBackStack() },
+                    onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
+                )
+            }
+            composable<Route.Volume> { entry ->
+                val route = entry.toRoute<Route.Volume>()
+                VolumeScreen(
+                    dashboardUnder(nav, entry, route.app, route.org),
+                    koinViewModel { parametersOf(route.app, route.id) },
                     onBack = { nav.popBackStack() },
                     onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
                 )

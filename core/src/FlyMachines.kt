@@ -10,11 +10,12 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
 /**
- * The Machines API at api.machines.dev, for reading: an app's machines, volumes, IPs, certificates
- * and secrets. Actions are [FlyMachineActions].
+ * The Machines API at api.machines.dev, for reading: an app's machines, volumes and their snapshots,
+ * IPs, certificates and secrets. Actions are [FlyMachineActions].
  */
 class FlyMachines(
     private val http: HttpClient,
@@ -41,6 +42,19 @@ class FlyMachines(
         http
             .getJson<List<FlyVolume>>("$machinesUrl/v1/apps/$app/volumes", token.machinesHeader)
             .filter { it.state !in GONE_VOLUME_STATES }
+
+    /**
+     * A volume's snapshots, newest first: fly-go's `flaps.GetVolumeSnapshots`, what
+     * `fly volumes snapshots list` lists (oldest first, there).
+     */
+    suspend fun volumeSnapshots(
+        app: String,
+        volumeId: String,
+    ): List<FlyVolumeSnapshot> =
+        http
+            .getJson<List<FlyVolumeSnapshot>?>("$machinesUrl/v1/apps/$app/volumes/$volumeId/snapshots", token.machinesHeader)
+            .orEmpty()
+            .sortedByDescending { it.createdInstant }
 
     suspend fun ips(app: String): List<FlyIp> =
         http.getJson<IpAssignments>("$machinesUrl/v1/apps/$app/ip_assignments", token.machinesHeader).ips
@@ -264,12 +278,18 @@ class FlyVolume(
     val state: String = "",
     @SerialName("size_gb") val sizeGb: Int = 0,
     val region: String = "",
+    /** The hardware zone in [region] it lives on, which a machine using it must be in too. */
+    val zone: String = "",
     val encrypted: Boolean = false,
     @SerialName("attached_machine_id") val attachedMachineId: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     // Not in Fly.io's API docs, but the API returns them; null when it doesn't.
     @SerialName("bytes_used") val bytesUsed: Long? = null,
     @SerialName("bytes_total") val bytesTotal: Long? = null,
+    /** How many days each snapshot is kept, as `fly volumes show` prints it; null when the API doesn't say. */
+    @SerialName("snapshot_retention") val snapshotRetention: Int? = null,
+    /** Whether Fly.io snapshots it every day, `fly volumes show`'s "Scheduled snapshots". */
+    @SerialName("auto_backup_enabled") val autoBackupEnabled: Boolean? = null,
 ) {
     /** How much of it is used, from 0 to 1, or null when the API doesn't say. */
     val usedFraction: Double?
@@ -291,6 +311,28 @@ class FlyVolume(
          */
         const val NEARLY_FULL = 0.9
     }
+}
+
+/** A snapshot of a volume, as a row of `fly volumes snapshots list`: fly-go's VolumeSnapshot. */
+@Serializable
+class FlyVolumeSnapshot(
+    /** Empty while it's being taken, which flyctl shows as `(pending)`. */
+    val id: String = "",
+    /** What Fly.io stores for it, in bytes: flyctl's "Stored Size", which it adds up below the list. */
+    val size: Long = 0,
+    /** The volume's size when it was taken, in bytes. */
+    @SerialName("volume_size") val volumeSize: Long = 0,
+    val digest: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+    /** `created` once it's done; other values while it's being taken, or if it failed. */
+    val status: String = "",
+    /** How many days Fly.io keeps it; null when the API doesn't say. */
+    @SerialName("retention_days") val retentionDays: Int? = null,
+) {
+    val createdInstant: Instant? get() = createdAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+    /** When Fly.io deletes it: [retentionDays] after it was taken. */
+    val expiresAt: Instant? get() = retentionDays?.let { days -> createdInstant?.plus(days.days) }
 }
 
 @Serializable
