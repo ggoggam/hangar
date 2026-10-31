@@ -29,8 +29,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.dateTimeAgo
 import dev.ggoggam.hangar.app.ui.machineTone
 import dev.ggoggam.hangar.app.ui.releaseTone
@@ -58,6 +60,7 @@ fun ReleaseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) }
                 },

@@ -40,9 +40,11 @@ import dev.ggoggam.hangar.app.dashboard.UsageBar
 import dev.ggoggam.hangar.app.dashboard.section
 import dev.ggoggam.hangar.app.dashboard.usageTone
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
 import dev.ggoggam.hangar.app.ui.ago
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.bytes
 import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.core.FlyPostgresBackup
@@ -68,6 +70,7 @@ fun ClusterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) } },
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )

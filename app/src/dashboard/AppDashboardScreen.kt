@@ -39,10 +39,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.core.FlyMachine
 import dev.ggoggam.hangar.core.FlyRelease
 import kotlinx.coroutines.delay
@@ -90,7 +92,8 @@ fun AppDashboardScreen(
 
     Scaffold(
         topBar = {
-            Column {
+            // The shadow under the tabs, which scroll the content with the bar.
+            Column(Modifier.barShadow(BarEdge.Bottom)) {
                 TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) }

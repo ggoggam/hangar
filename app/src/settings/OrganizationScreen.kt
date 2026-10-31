@@ -22,8 +22,10 @@ import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.User
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.instantOf
 import dev.ggoggam.hangar.core.FlyAccessToken
 import org.jetbrains.compose.resources.stringResource
@@ -41,6 +43,7 @@ fun OrganizationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) } },
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             )

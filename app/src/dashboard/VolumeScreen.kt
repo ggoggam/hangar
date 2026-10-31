@@ -28,9 +28,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
 import dev.ggoggam.hangar.app.ui.ago
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.bytes
 import dev.ggoggam.hangar.app.ui.calendarDate
 import dev.ggoggam.hangar.app.ui.dateTime
@@ -62,6 +64,7 @@ fun VolumeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Lucide.ArrowLeft, stringResource(Res.string.back)) } },
                 title = { Text(volume?.name?.ifEmpty { null } ?: vm.volumeId, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 actions = {

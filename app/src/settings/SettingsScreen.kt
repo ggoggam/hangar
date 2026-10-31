@@ -50,6 +50,8 @@ import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.lock.AppLock
 import dev.ggoggam.hangar.app.session.rememberDeviceAuth
+import dev.ggoggam.hangar.app.ui.BarEdge
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.app.ui.usd
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
@@ -88,7 +90,7 @@ fun SettingsScreen(
         SignOutDialog(next = others.firstOrNull(), onConfirm = vm::signOut, onDismiss = { confirmSignOut = false })
     }
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) },
+        topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }, modifier = Modifier.barShadow(BarEdge.Bottom)) },
         bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {

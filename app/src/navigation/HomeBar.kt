@@ -8,12 +8,15 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.lucide.Database
 import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
+import dev.ggoggam.hangar.app.ui.barShadow
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -34,7 +37,7 @@ fun HomeBar(
     current: HomeTab,
     onSelect: (HomeTab) -> Unit,
 ) {
-    Column {
+    Column(Modifier.barShadow(BarEdge.Top)) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
             HomeTab.entries.forEach { tab ->

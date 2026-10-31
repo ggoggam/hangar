@@ -54,10 +54,12 @@ import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.status.incidentList
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.app.ui.bytes
 import dev.ggoggam.hangar.app.ui.decimal
 import dev.ggoggam.hangar.app.ui.usd
@@ -82,6 +84,7 @@ fun AppsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 title = {
                     Column {
                         Text(stringResource(Res.string.apps_title))

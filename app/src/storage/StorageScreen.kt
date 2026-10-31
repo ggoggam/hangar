@@ -34,10 +34,12 @@ import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.SectionTitle
 import dev.ggoggam.hangar.app.dashboard.section
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.ui.BarEdge
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
 import dev.ggoggam.hangar.app.ui.appStatusLabel
 import dev.ggoggam.hangar.app.ui.appStatusTone
+import dev.ggoggam.hangar.app.ui.barShadow
 import dev.ggoggam.hangar.core.FlyAddOn
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlyPostgresCluster
@@ -58,6 +60,7 @@ fun StorageScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.barShadow(BarEdge.Bottom),
                 title = { Text(stringResource(Res.string.data_title)) },
             )
         },
