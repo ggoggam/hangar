@@ -220,7 +220,32 @@ private class FlyDemo(
                 }
 
                 "AddOns" -> {
-                    obj("addOns" to mapOf("nodes" to ADD_ONS.filter { it["type"] == variable("addOnType") }.map { it - "type" }))
+                    obj(
+                        "addOns" to
+                            mapOf(
+                                "nodes" to
+                                    ADD_ONS.filter { it["type"] == variable("addOnType") }.map { it - "type" - "app" - "createdDaysAgo" },
+                            ),
+                    )
+                }
+
+                "Bucket" -> {
+                    val bucket =
+                        ADD_ONS.firstOrNull { it["type"] == variable("provider") && it["name"] == variable("name") }
+                            ?: throw NotInDemo()
+                    obj(
+                        "addOn" to
+                            mapOf(
+                                "id" to bucket["id"],
+                                "name" to bucket["name"],
+                                "status" to "ready",
+                                "errorMessage" to null,
+                                "createdAt" to iso(now - (bucket["createdDaysAgo"] as Int) * DAY),
+                                "options" to bucket["options"],
+                                "organization" to bucket["organization"],
+                                "app" to mapOf("name" to bucket["app"]),
+                            ),
+                    )
                 }
 
                 "RoleApps" -> {
@@ -1326,6 +1351,7 @@ private val ADD_ONS =
             "options" to mapOf("eviction" to true),
             "organization" to mapOf("slug" to "demo-team"),
         ),
+        // A public bucket on a custom domain, and a private one filling itself from S3.
         mapOf(
             "type" to "tigris",
             "id" to "demo-tigris",
@@ -1333,8 +1359,41 @@ private val ADD_ONS =
             "addOnPlan" to null,
             "primaryRegion" to "",
             "readRegions" to null,
-            "options" to emptyMap<String, Any>(),
+            "options" to
+                mapOf(
+                    "public" to true,
+                    "accelerate" to false,
+                    "website" to mapOf("domain_name" to "cdn.example.com"),
+                ),
             "organization" to mapOf("slug" to "demo-team"),
+            "app" to "image-resizer",
+            "createdDaysAgo" to 140,
+        ),
+        mapOf(
+            "type" to "tigris",
+            "id" to "demo-tigris-backups",
+            "name" to "portfolio-backups",
+            "addOnPlan" to null,
+            "primaryRegion" to "",
+            "readRegions" to null,
+            "options" to
+                mapOf(
+                    "public" to false,
+                    "accelerate" to false,
+                    "website" to mapOf("domain_name" to ""),
+                    "shadow_bucket" to
+                        mapOf(
+                            "name" to "portfolio-backups-old",
+                            "endpoint" to "https://s3.us-east-1.amazonaws.com",
+                            "region" to "us-east-1",
+                            "write_through" to true,
+                            "access_key" to "DEMO-ACCESS-KEY",
+                            "secret_key" to "DEMO-SECRET-KEY",
+                        ),
+                ),
+            "organization" to mapOf("slug" to "personal"),
+            "app" to "portfolio",
+            "createdDaysAgo" to 31,
         ),
     )
 

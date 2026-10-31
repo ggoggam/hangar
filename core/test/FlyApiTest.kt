@@ -16,6 +16,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class FlyApiTest {
     private val requests = mutableListOf<HttpRequestData>()
@@ -180,6 +181,68 @@ class FlyApiTest {
             assertEquals(null, bucket.primaryRegion)
             assertEquals(emptyList(), bucket.readRegions)
             assertEquals(null, bucket.planName)
+        }
+
+    @Test
+    fun readsABucketsSettingsWithoutItsShadowKeys() =
+        runTest {
+            val fly =
+                api(
+                    HttpStatusCode.OK to
+                        """{"data":{"addOn":{"id":"t1","name":"assets","status":"ready","errorMessage":null,""" +
+                        """"createdAt":"2026-09-01T00:00:00Z","options":{"public":true,"accelerate":false,""" +
+                        """"website":{"domain_name":"cdn.example.com"},""" +
+                        """"shadow_bucket":{"name":"old","endpoint":"https://s3.example.com","region":"us-east-1",""" +
+                        """"write_through":true,"access_key":"AK","secret_key":"SK"}},""" +
+                        """"organization":{"slug":"personal"},"app":{"name":"web"}}}}""",
+                )
+
+            val bucket = fly.bucket("assets")
+
+            assertEquals("ready", bucket.status)
+            assertEquals("personal", bucket.org)
+            assertEquals("web", bucket.app)
+            assertEquals(true, bucket.public)
+            assertEquals(false, bucket.accelerate)
+            assertEquals("cdn.example.com", bucket.customDomain)
+            assertEquals("assets.t3.tigrisbucket.io", bucket.cnameTarget)
+            assertEquals("old", bucket.shadow?.name)
+            assertEquals("us-east-1", bucket.shadow?.region)
+            assertEquals(true, bucket.shadow?.writeThrough)
+            val body = Json.parseToJsonElement((requests.single().body as TextContent).text).jsonObject
+            val variables = body.getValue("variables").jsonObject
+            assertEquals("assets", variables.getValue("name").jsonPrimitive.content)
+            assertEquals("tigris", variables.getValue("provider").jsonPrimitive.content)
+            val query = body.getValue("query").jsonPrimitive.content
+            assertFalse("password" in query || "ssoLink" in query)
+        }
+
+    @Test
+    fun readsABucketWithItsSettingsCleared() =
+        runTest {
+            // `fly storage update --clear-shadow --clear-custom-domain` leaves these behind.
+            val fly =
+                api(
+                    HttpStatusCode.OK to
+                        """{"data":{"addOn":{"id":"t1","name":"assets","status":"","options":{"website":{"domain_name":""},""" +
+                        """"shadow_bucket":{}},"organization":{"slug":"personal"},"app":null}}}""",
+                )
+
+            val bucket = fly.bucket("assets")
+
+            assertEquals(null, bucket.status)
+            assertEquals(null, bucket.app)
+            assertEquals(false, bucket.public)
+            assertEquals(null, bucket.customDomain)
+            assertEquals(null, bucket.shadow)
+        }
+
+    @Test
+    fun saysWhenThereIsNoSuchBucket() =
+        runTest {
+            val fly = api(HttpStatusCode.OK to """{"data":{"addOn":null}}""")
+
+            assertFailsWith<FlyApiException.Failed> { fly.bucket("gone") }
         }
 
     @Test

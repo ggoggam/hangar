@@ -38,6 +38,13 @@ sealed interface Route {
         val rawOrg: String,
     ) : Route
 
+    /** One Tigris bucket. [org] is its organization's slug, which its attached app's dashboard takes. */
+    @Serializable
+    data class Bucket(
+        val name: String,
+        val org: String,
+    ) : Route
+
     /** Fly.io's regions. */
     @Serializable
     data object Regions : Route
