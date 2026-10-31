@@ -126,7 +126,7 @@ The bottom bar switches between the app list and three more screens:
 |---|---|
 | Fly.io status | `incidents.flyio.net/v1/incidents`, the feed `fly incidents list` reads, with no token. Open incidents are listed at the top of the app list, and a dismissable banner runs across the top of every screen while any is open, as flyctl warns before its commands. Checked every minute while the app is in front. A link opens status.fly.io in the browser, as `fly platform status` does. |
 | Data & storage | `fly mpg list` for each organization (GraphQL `organizations`, then `api.machines.dev/v1/postgres?org_slug=` merged with `api.fly.io/api/v1/organizations/{org}/postgres`, the way flyctl merges them), `fly postgres list` (GraphQL `apps(role: "postgres_cluster")`), and `fly redis list` and `fly storage list` (GraphQL `addOns(type:)` for `upstash_redis` and `tigris`). Tapping a Managed Postgres cluster opens what `fly mpg status` shows, from `api.machines.dev/v1/postgres/{id}` (fly-go's `GetManagedPostgresCluster`): size, Postgres version, replicas, disk usage, the direct and pooler hosts, and its attached apps, which open their dashboards. Then its databases, users and roles, and backups, from `/v1/postgres/{id}/databases`, `/users` and `/backups`, falling back where flyctl does to `api.fly.io/api/v1/postgresv2/{id}/…`, or `/api/v1/postgres/{id}/…` for a first-version cluster. For a cluster the Machines API doesn't have, flyctl reads `api.fly.io/api/v1/postgres/{id}`, whose answer carries a password and connection string, so Hangar takes the cluster's row from the organization's list instead. No password, connection string or credentials endpoint is ever asked for. |
-| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the other accounts signed in on this device, to switch to, adding one, the background checks below, the theme switch, and signing out, which asks first. All read-only: Hangar doesn't invite, remove or revoke. |
+| Settings | `fly auth whoami` (GraphQL `viewer`), `fly orgs list` (GraphQL `organizations`), and for each organization `fly orgs show` (its members) and `fly tokens list --scope org` (names, creators and expiry dates; never the tokens, which Fly.io doesn't hand back). `fly platform regions` comes from `api.machines.dev/v1/platform/regions`. Also the other accounts signed in on this device, to switch to, adding one, the background checks below, the app lock, the theme switch, and signing out, which asks first. The app lock asks for Face ID, a fingerprint or the device passcode when Hangar opens, and again when it comes back after a minute or more in the background; turning it on asks first, so it's never on for someone who can't get past it. All read-only: Hangar doesn't invite, remove or revoke. |
 
 The app list opens with an estimate of each organization's usage over the last 14 days, and each
 app's share under its name. Neither flyctl nor Fly.io's API reports bills, so Hangar works it out
@@ -200,11 +200,13 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   Renewing a token's auth discharge goes to the third party the token names, and
   `FlyDischarges` refuses any host but `api.fly.io` and `auth.fly.io`, so your OAuth token can't
   be sent anywhere else. The background checks call the same hosts. On Android the only
-  permissions it asks for are `INTERNET`, and `POST_NOTIFICATIONS` when you turn the background
-  checks on; WorkManager adds the ones it needs to run and reschedule them (`WAKE_LOCK`,
+  permissions it asks for are `INTERNET`, `POST_NOTIFICATIONS` when you turn the background
+  checks on, and `USE_BIOMETRIC` for the app lock, which Android grants without asking;
+  WorkManager adds the ones it needs to run and reschedule them (`WAKE_LOCK`,
   `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`). On iOS it asks to
-  send notifications at the same point, and declares the `fetch` background mode for background
-  refresh. "Try the
+  send notifications at the same point, declares the `fetch` background mode for background
+  refresh, and says why it uses Face ID (`NSFaceIDUsageDescription`), which iOS asks about the
+  first time the app lock does. "Try the
   demo" connects to nothing: while it's signed in, the screens get a client that answers every
   call from sample data built into the app (`core/src/FlyDemo.kt`).
 - **What it sends.** Your Fly.io token, to Fly.io. When you sign in, a name for the login
@@ -213,12 +215,15 @@ analytics, crash reporting, ads or other third-party SDKs (the dependencies are 
   identifier. Every request carries the User-Agent `hangar/0.1 (unofficial Fly.io client)`.
 - **What it sees.** Your password and your Google or GitHub sign-in never reach the app: you
   sign in on fly.io in the system's sign-in browser (Custom Tabs, ASWebAuthenticationSession),
-  and the app only gets the code Fly.io shows afterwards.
+  and the app only gets the code Fly.io shows afterwards. The same goes for the app lock: your
+  face, fingerprint and passcode are checked by the system (BiometricPrompt, LocalAuthentication),
+  which only tells the app whether it worked.
 - **What it keeps.** The token of each account you sign in to, with the account's email (or for a
   token without a user, its organization's name) to tell them apart, on the device: sealed under an
   Android Keystore key and excluded from backups (`allowBackup="false"`), or in the iOS Keychain
-  for this device only. Signing out of an account deletes its token and email. Besides that, only whether you picked dark or light mode, which
-  notifications you want and the spend alert's amount, in SharedPreferences or NSUserDefaults, and for the background checks,
+  for this device only. Signing out of an account deletes its token and email. Besides that, only
+  whether you picked dark or light mode, which notifications you want, the spend alert's amount
+  and whether the app lock is on, in SharedPreferences or NSUserDefaults, and for the background checks,
   what the last one saw (`FlyWatchState`): the names of Fly.io's open incidents, which are public,
   and for your apps only one-way fingerprints (truncated SHA-256) of the problems already
   notified, never an app's, machine's, volume's or organization's name. The apps you pin to the top

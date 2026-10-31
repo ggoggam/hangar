@@ -40,6 +40,8 @@ import dev.ggoggam.hangar.app.dashboard.DashboardTab
 import dev.ggoggam.hangar.app.dashboard.MachineScreen
 import dev.ggoggam.hangar.app.dashboard.ReleaseScreen
 import dev.ggoggam.hangar.app.dashboard.VolumeScreen
+import dev.ggoggam.hangar.app.lock.AppLock
+import dev.ggoggam.hangar.app.lock.LockedBy
 import dev.ggoggam.hangar.app.login.LoginScreen
 import dev.ggoggam.hangar.app.login.LoginViewModel
 import dev.ggoggam.hangar.app.navigation.HomeBar
@@ -62,6 +64,7 @@ import dev.ggoggam.hangar.app.watch.keepScheduled
 import dev.ggoggam.hangar.core.FlyApp
 import dev.ggoggam.hangar.core.FlySession
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -81,11 +84,14 @@ fun App() {
             val checks = koinInject<BackgroundChecks>()
             // Background checks follow the switch in Settings and the session.
             LaunchedEffect(session, watch, checks) { keepScheduled(session, watch, checks) }
+            val lock = koinInject<AppLock>()
             if (token == null) {
+                // Nothing to protect while signed out, and signing in shouldn't be met by the lock.
+                LaunchedEffect(lock) { lock.open() }
                 LoginScreen(koinViewModel())
             } else {
                 // Keyed on the account, so signing in again or switching starts from the app list with fresh screens.
-                key(accounts.firstOrNull { it.current }?.id) { SignedIn() }
+                key(accounts.firstOrNull { it.current }?.id) { SignedIn(lock) }
             }
         }
     }
@@ -93,7 +99,7 @@ fun App() {
 
 /** The app list, the screens it opens and the bottom bar's other screens, for the current account. */
 @Composable
-private fun SignedIn() {
+private fun SignedIn(lock: AppLock) {
     val nav = rememberNavController()
     val feed = koinInject<IncidentFeed>()
     val incidents by feed.incidents.collectAsStateWithLifecycle()
@@ -112,121 +118,125 @@ private fun SignedIn() {
 
     // Every open incident, until they're dismissed and none has opened since.
     val banner = incidents.orEmpty().takeIf { open -> open.any { it.id !in dismissed } }
-    Column(Modifier.fillMaxSize()) {
-        banner?.let { IncidentBanner(it, onOpen = { nav.openTab(HomeTab.Apps) }, onDismiss = feed::dismiss) }
-        // Screens slide sideways: forward pushes in from the end, back slides them out again.
-        // Switching between the bottom bar's screens fades instead, since neither is on top.
-        // Under the banner, which takes the status bar's space, so the screens' top bars don't.
-        NavHost(
-            nav,
-            startDestination = Route.Apps,
-            modifier =
-                Modifier.weight(1f).consumeWindowInsets(
-                    if (banner !=
-                        null
-                    ) {
-                        WindowInsets.statusBars
-                    } else {
-                        WindowInsets(0.dp)
-                    },
-                ),
-            enterTransition = { if (isTabSwitch()) fadeIn(Fade) else slideIntoContainer(SlideDirection.Start, Slide) },
-            exitTransition = { if (isTabSwitch()) fadeOut(Fade) else slideOutOfContainer(SlideDirection.Start, Slide) },
-            popEnterTransition = { if (isTabSwitch()) fadeIn(Fade) else slideIntoContainer(SlideDirection.End, Slide) },
-            popExitTransition = { if (isTabSwitch()) fadeOut(Fade) else slideOutOfContainer(SlideDirection.End, Slide) },
-        ) {
-            val openApp = { app: FlyApp -> nav.navigate(Route.App(app.name, app.organization.slug)) }
-            val bar = @Composable { current: HomeTab -> HomeBar(current) { nav.openTab(it) } }
-            composable<Route.Apps> {
-                AppsScreen(koinViewModel(), onOpen = openApp, bottomBar = { bar(HomeTab.Apps) })
-            }
-            composable<Route.Storage> {
-                StorageScreen(
-                    koinViewModel(),
-                    onOpenApp = openApp,
-                    onOpenCluster = { nav.navigate(Route.PostgresCluster(it.id, it.name, it.org, it.rawOrg)) },
-                    bottomBar = { bar(HomeTab.Data) },
-                )
-            }
-            composable<Route.PostgresCluster> { entry ->
-                val route = entry.toRoute<Route.PostgresCluster>()
-                ClusterScreen(
-                    koinViewModel { parametersOf(route.id, route.org, route.rawOrg) },
-                    title = route.name,
-                    onBack = { nav.popBackStack() },
-                    onOpenApp = { name -> nav.navigate(Route.App(name, route.org)) },
-                )
-            }
-            composable<Route.Settings> {
-                SettingsScreen(
-                    koinViewModel(),
-                    onOrganization = { org -> nav.navigate(Route.Organization(org.slug, org.name ?: org.slug)) },
-                    onRegions = { nav.navigate(Route.Regions) },
-                    onAddAccount = { nav.navigate(Route.AddAccount) },
-                    bottomBar = { bar(HomeTab.Settings) },
-                )
-            }
-            composable<Route.AddAccount> {
-                // Its own login, apart from the signed-out one. A new account starts the
-                // screens afresh above; signing in to one that's here already comes back.
-                val login = koinViewModel<LoginViewModel>()
-                LaunchedEffect(login) { login.signedIn.collect { nav.popBackStack() } }
-                LoginScreen(login, onCancel = { nav.popBackStack() })
-            }
-            composable<Route.Organization> { entry ->
-                val route = entry.toRoute<Route.Organization>()
-                OrganizationScreen(
-                    koinViewModel { parametersOf(route.slug) },
-                    title = route.name,
-                    onBack = { nav.popBackStack() },
-                )
-            }
-            composable<Route.Regions> { RegionsScreen(koinViewModel(), onBack = { nav.popBackStack() }) }
-            composable<Route.App> { entry ->
-                val route = entry.toRoute<Route.App>()
-                AppDashboardScreen(
-                    koinViewModel { parametersOf(route.name, route.org) },
-                    onBack = { nav.popBackStack() },
-                    initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
-                    onMachine = { nav.navigate(Route.Machine(route.name, route.org, it.id)) },
-                    onRelease = { nav.navigate(Route.Release(route.name, route.org, it.version)) },
-                    onVolume = { nav.navigate(Route.Volume(route.name, route.org, it)) },
-                    onCertificate = { nav.navigate(Route.Certificate(route.name, it)) },
-                )
-            }
-            composable<Route.Machine> { entry ->
-                val route = entry.toRoute<Route.Machine>()
-                MachineScreen(dashboardUnder(nav, entry, route.app, route.org), route.id, onBack = { nav.popBackStack() })
-            }
-            composable<Route.Release> { entry ->
-                val route = entry.toRoute<Route.Release>()
-                ReleaseScreen(
-                    dashboardUnder(nav, entry, route.app, route.org),
-                    route.version,
-                    onBack = { nav.popBackStack() },
-                    onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
-                )
-            }
-            composable<Route.Volume> { entry ->
-                val route = entry.toRoute<Route.Volume>()
-                VolumeScreen(
-                    dashboardUnder(nav, entry, route.app, route.org),
-                    koinViewModel { parametersOf(route.app, route.id) },
-                    onBack = { nav.popBackStack() },
-                    onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
-                )
-            }
-            composable<Route.Certificate> { entry ->
-                val route = entry.toRoute<Route.Certificate>()
-                CertificateScreen(koinViewModel { parametersOf(route.app, route.hostname) }, onBack = { nav.popBackStack() })
+    LockedBy(lock) {
+        Column(Modifier.fillMaxSize()) {
+            banner?.let { IncidentBanner(it, onOpen = { nav.openTab(HomeTab.Apps) }, onDismiss = feed::dismiss) }
+            // Screens slide sideways: forward pushes in from the end, back slides them out again.
+            // Switching between the bottom bar's screens fades instead, since neither is on top.
+            // Under the banner, which takes the status bar's space, so the screens' top bars don't.
+            NavHost(
+                nav,
+                startDestination = Route.Apps,
+                modifier =
+                    Modifier.weight(1f).consumeWindowInsets(
+                        if (banner !=
+                            null
+                        ) {
+                            WindowInsets.statusBars
+                        } else {
+                            WindowInsets(0.dp)
+                        },
+                    ),
+                enterTransition = { if (isTabSwitch()) fadeIn(Fade) else slideIntoContainer(SlideDirection.Start, Slide) },
+                exitTransition = { if (isTabSwitch()) fadeOut(Fade) else slideOutOfContainer(SlideDirection.Start, Slide) },
+                popEnterTransition = { if (isTabSwitch()) fadeIn(Fade) else slideIntoContainer(SlideDirection.End, Slide) },
+                popExitTransition = { if (isTabSwitch()) fadeOut(Fade) else slideOutOfContainer(SlideDirection.End, Slide) },
+            ) {
+                val openApp = { app: FlyApp -> nav.navigate(Route.App(app.name, app.organization.slug)) }
+                val bar = @Composable { current: HomeTab -> HomeBar(current) { nav.openTab(it) } }
+                composable<Route.Apps> {
+                    AppsScreen(koinViewModel(), onOpen = openApp, bottomBar = { bar(HomeTab.Apps) })
+                }
+                composable<Route.Storage> {
+                    StorageScreen(
+                        koinViewModel(),
+                        onOpenApp = openApp,
+                        onOpenCluster = { nav.navigate(Route.PostgresCluster(it.id, it.name, it.org, it.rawOrg)) },
+                        bottomBar = { bar(HomeTab.Data) },
+                    )
+                }
+                composable<Route.PostgresCluster> { entry ->
+                    val route = entry.toRoute<Route.PostgresCluster>()
+                    ClusterScreen(
+                        koinViewModel { parametersOf(route.id, route.org, route.rawOrg) },
+                        title = route.name,
+                        onBack = { nav.popBackStack() },
+                        onOpenApp = { name -> nav.navigate(Route.App(name, route.org)) },
+                    )
+                }
+                composable<Route.Settings> {
+                    SettingsScreen(
+                        koinViewModel(),
+                        onOrganization = { org -> nav.navigate(Route.Organization(org.slug, org.name ?: org.slug)) },
+                        onRegions = { nav.navigate(Route.Regions) },
+                        onAddAccount = { nav.navigate(Route.AddAccount) },
+                        bottomBar = { bar(HomeTab.Settings) },
+                    )
+                }
+                composable<Route.AddAccount> {
+                    // Its own login, apart from the signed-out one. A new account starts the
+                    // screens afresh above; signing in to one that's here already comes back.
+                    val login = koinViewModel<LoginViewModel>()
+                    LaunchedEffect(login) { login.signedIn.collect { nav.popBackStack() } }
+                    LoginScreen(login, onCancel = { nav.popBackStack() })
+                }
+                composable<Route.Organization> { entry ->
+                    val route = entry.toRoute<Route.Organization>()
+                    OrganizationScreen(
+                        koinViewModel { parametersOf(route.slug) },
+                        title = route.name,
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+                composable<Route.Regions> { RegionsScreen(koinViewModel(), onBack = { nav.popBackStack() }) }
+                composable<Route.App> { entry ->
+                    val route = entry.toRoute<Route.App>()
+                    AppDashboardScreen(
+                        koinViewModel { parametersOf(route.name, route.org) },
+                        onBack = { nav.popBackStack() },
+                        initialTab = DashboardTab.entries.firstOrNull { it.name == route.tab } ?: DashboardTab.Overview,
+                        onMachine = { nav.navigate(Route.Machine(route.name, route.org, it.id)) },
+                        onRelease = { nav.navigate(Route.Release(route.name, route.org, it.version)) },
+                        onVolume = { nav.navigate(Route.Volume(route.name, route.org, it)) },
+                        onCertificate = { nav.navigate(Route.Certificate(route.name, it)) },
+                    )
+                }
+                composable<Route.Machine> { entry ->
+                    val route = entry.toRoute<Route.Machine>()
+                    MachineScreen(dashboardUnder(nav, entry, route.app, route.org), route.id, onBack = { nav.popBackStack() })
+                }
+                composable<Route.Release> { entry ->
+                    val route = entry.toRoute<Route.Release>()
+                    ReleaseScreen(
+                        dashboardUnder(nav, entry, route.app, route.org),
+                        route.version,
+                        onBack = { nav.popBackStack() },
+                        onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
+                    )
+                }
+                composable<Route.Volume> { entry ->
+                    val route = entry.toRoute<Route.Volume>()
+                    VolumeScreen(
+                        dashboardUnder(nav, entry, route.app, route.org),
+                        koinViewModel { parametersOf(route.app, route.id) },
+                        onBack = { nav.popBackStack() },
+                        onMachine = { nav.navigate(Route.Machine(route.app, route.org, it.id)) },
+                    )
+                }
+                composable<Route.Certificate> { entry ->
+                    val route = entry.toRoute<Route.Certificate>()
+                    CertificateScreen(koinViewModel { parametersOf(route.app, route.hostname) }, onBack = { nav.popBackStack() })
+                }
             }
         }
     }
 
-    // A tapped notification's screen, once the graph above is set up: now, or when the app starts.
+    // A tapped notification's screen, once the graph above is set up and the app is
+    // unlocked: now, or when the app starts.
     val links = koinInject<NotificationLinks>()
-    LaunchedEffect(links, nav) {
-        links.pending.filterNotNull().collect {
+    LaunchedEffect(links, nav, lock) {
+        val unlocked = combine(links.pending, lock.locked) { link, locked -> link.takeUnless { locked } }
+        unlocked.filterNotNull().collect {
             when (val link = links.take()) {
                 NotificationLink.Apps -> nav.openTab(HomeTab.Apps)
                 is NotificationLink.App -> nav.navigate(Route.App(link.name, link.org, link.tab)) { popUpTo<Route.Apps>() }
