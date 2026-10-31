@@ -51,6 +51,7 @@ fun StorageScreen(
     vm: StorageViewModel,
     onOpenApp: (FlyApp) -> Unit,
     onOpenCluster: (FlyPostgresCluster) -> Unit,
+    onOpenBucket: (FlyAddOn) -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -71,7 +72,12 @@ fun StorageScreen(
                 titled(Res.string.data_mpg, state.managedPostgres, "mpg", key = { it.id }) { ClusterCard(it) { onOpenCluster(it) } }
                 titled(Res.string.data_postgres, state.postgresApps, "pg", key = { it.name }) { PostgresAppRow(it) { onOpenApp(it) } }
                 titled(Res.string.data_redis, state.redis, "redis", key = { it.id.ifEmpty { it.name } }) { RedisCard(it) }
-                titled(Res.string.data_tigris, state.tigris, "tigris", key = { it.id.ifEmpty { it.name } }) { BucketCard(it) }
+                titled(
+                    Res.string.data_tigris,
+                    state.tigris,
+                    "tigris",
+                    key = { it.id.ifEmpty { it.name } },
+                ) { BucketCard(it) { onOpenBucket(it) } }
             }
         }
     }
@@ -175,11 +181,23 @@ private fun RedisCard(db: FlyAddOn) {
     }
 }
 
-/** A Tigris bucket, as a row of `fly storage list`. */
+/** A Tigris bucket, as a row of `fly storage list`: it opens the bucket's page. */
 @Composable
-private fun BucketCard(bucket: FlyAddOn) {
-    Panel {
-        Text(bucket.name, style = MaterialTheme.typography.bodyLarge)
+private fun BucketCard(
+    bucket: FlyAddOn,
+    onClick: () -> Unit,
+) {
+    Panel(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(bucket.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            if (bucket.public) StatusBadge(stringResource(Res.string.bucket_public), Tone.Neutral)
+            Icon(
+                Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Detail(listOfNotNull(bucket.organization?.slug))
     }
 }

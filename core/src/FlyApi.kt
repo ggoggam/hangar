@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 
@@ -116,6 +117,19 @@ class FlyApi(
         query<AddOnsData>(ADD_ONS_QUERY, buildJsonObject { put("addOnType", type) })
             .addOns.nodes
             .sortedWith(compareBy({ it.organization?.slug }, { it.name }))
+
+    /**
+     * One Tigris bucket, as `fly storage status` shows it. Its options carry a shadow bucket's
+     * access keys, which [FlyBucket] leaves behind.
+     */
+    suspend fun bucket(name: String): FlyBucket =
+        query<BucketData>(
+            BUCKET_QUERY,
+            buildJsonObject {
+                put("name", name)
+                put("provider", "tigris")
+            },
+        ).addOn?.toBucket() ?: throw FlyApiException.Failed("no bucket named $name")
 
     /** The unmanaged Postgres clusters, which are apps of their own, as `fly postgres list` finds them. */
     suspend fun postgresApps(): List<FlyApp> {
@@ -280,6 +294,22 @@ class FlyApi(
             }
         """
 
+        // flyctl's GetAddOn, behind `fly storage status`, without the password and SSO link it asks for too.
+        const val BUCKET_QUERY = """
+            query Bucket(${'$'}name: String, ${'$'}provider: String) {
+              addOn(name: ${'$'}name, provider: ${'$'}provider) {
+                id
+                name
+                status
+                errorMessage
+                createdAt
+                options
+                organization { slug }
+                app { name }
+              }
+            }
+        """
+
         // fly-go's getAppsPage with a role, behind `fly postgres list`.
         const val ROLE_APPS_QUERY = """
             query RoleApps(${'$'}after: String, ${'$'}role: String) {
@@ -425,12 +455,60 @@ class FlyAddOn(
     /** Whether the Upstash production pack is on, which `fly redis list` shows. */
     val prodPack: Boolean get() = option("prod_pack")
 
+    /** Whether a Tigris bucket's objects can be read without a key, as `fly storage update --public` sets. */
+    val public: Boolean get() = option("public")
+
     private fun option(key: String) = ((options as? JsonObject)?.get(key) as? JsonPrimitive)?.booleanOrNull == true
 }
 
 @Serializable
 class FlyAddOnPlan(
     val displayName: String? = null,
+)
+
+/**
+ * A Tigris bucket, as `fly storage status` shows it, with the settings `fly storage update` changes.
+ * Never its shadow bucket's access keys.
+ */
+class FlyBucket(
+    val id: String,
+    val name: String,
+    /** As the extension reports it; null when Fly.io doesn't say. */
+    val status: String?,
+    /** Why, when [status] is `error`. */
+    val errorMessage: String?,
+    val createdAt: String?,
+    val org: String?,
+    /** The app it was made for, whose secrets hold its keys; null for one made on its own. */
+    val app: String?,
+    /** Whether anyone can read its objects without a key (`--public`). */
+    val public: Boolean,
+    /** Whether objects are cached in every region as they're written (`--accelerate`). */
+    val accelerate: Boolean,
+    /** The domain it serves its objects on as a website (`--custom-domain`). */
+    val customDomain: String?,
+    /** The bucket elsewhere it reads objects it doesn't have from (`--shadow-name` and the rest). */
+    val shadow: FlyShadowBucket?,
+) {
+    /** Where a public bucket's objects are, by key under it. */
+    val publicUrl: String get() = "https://$name.fly.storage.tigris.dev"
+
+    /** What [customDomain]'s CNAME record points at, as `fly storage update --custom-domain` says. */
+    val cnameTarget: String get() = "$name.t3.tigrisbucket.io"
+
+    companion object {
+        /** The S3 endpoint every bucket on Fly.io answers at, which `fly storage create` sets as `AWS_ENDPOINT_URL_S3`. */
+        const val ENDPOINT = "https://fly.storage.tigris.dev"
+    }
+}
+
+/** A bucket on another S3-compatible service that a Tigris bucket fills itself from. */
+class FlyShadowBucket(
+    val name: String,
+    val endpoint: String?,
+    val region: String?,
+    /** Whether new objects are written to it too, not only read from it. */
+    val writeThrough: Boolean,
 )
 
 /** One app's page: what `fly status` shows above its machines. */
@@ -617,6 +695,56 @@ private class AddOnsData(
 @Serializable
 private class AddOnNodes(
     val nodes: List<FlyAddOn> = emptyList(),
+)
+
+@Serializable
+private class BucketData(
+    val addOn: BucketNode? = null,
+)
+
+@Serializable
+private class BucketNode(
+    val id: String = "",
+    val name: String = "",
+    val status: String? = null,
+    val errorMessage: String? = null,
+    val createdAt: String? = null,
+    val options: JsonElement? = null,
+    val organization: FlyOrganization? = null,
+    val app: BucketApp? = null,
+) {
+    // Takes the settings out of the options by name, so the shadow bucket's keys go no further.
+    fun toBucket(): FlyBucket {
+        val options = options as? JsonObject
+        val website = options?.get("website") as? JsonObject
+        val shadow = options?.get("shadow_bucket") as? JsonObject
+        return FlyBucket(
+            id = id,
+            name = name,
+            status = status?.ifBlank { null },
+            errorMessage = errorMessage?.ifBlank { null },
+            createdAt = createdAt,
+            org = organization?.slug,
+            app = app?.name?.ifBlank { null },
+            public = options.flag("public"),
+            accelerate = options.flag("accelerate"),
+            customDomain = website.text("domain_name"),
+            // `fly storage update --clear-shadow` leaves an empty object behind.
+            shadow =
+                shadow.text("name")?.let {
+                    FlyShadowBucket(it, shadow.text("endpoint"), shadow.text("region"), shadow.flag("write_through"))
+                },
+        )
+    }
+
+    private fun JsonObject?.flag(key: String) = (this?.get(key) as? JsonPrimitive)?.booleanOrNull == true
+
+    private fun JsonObject?.text(key: String) = (this?.get(key) as? JsonPrimitive)?.contentOrNull?.ifBlank { null }
+}
+
+@Serializable
+private class BucketApp(
+    val name: String = "",
 )
 
 @Serializable

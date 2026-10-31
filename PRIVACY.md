@@ -54,7 +54,9 @@ itself and only tells the app whether it worked. None of them reach the app.
 Your apps, logs and metrics are held in memory while they're on screen, as are
 your secrets' names and digests; their values are never asked for. The same goes for your
 Managed Postgres databases' and users' names and hosts: the app never asks for their passwords or
-connection strings. The app
+connection strings. For a Tigris bucket it keeps its settings and its shadow bucket's name, never
+the shadow bucket's access keys, which Fly.io sends along, and never the bucket's own keys or
+objects. The app
 doesn't write them to disk, log them or send them anywhere else. A notification names the app it's
 about, and your device keeps it until you dismiss it.
 

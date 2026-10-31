@@ -54,6 +54,7 @@ import dev.ggoggam.hangar.app.settings.SystemBars
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentBanner
 import dev.ggoggam.hangar.app.status.IncidentFeed
+import dev.ggoggam.hangar.app.storage.BucketScreen
 import dev.ggoggam.hangar.app.storage.ClusterScreen
 import dev.ggoggam.hangar.app.storage.StorageScreen
 import dev.ggoggam.hangar.app.watch.BackgroundChecks
@@ -152,7 +153,17 @@ private fun SignedIn(lock: AppLock) {
                         koinViewModel(),
                         onOpenApp = openApp,
                         onOpenCluster = { nav.navigate(Route.PostgresCluster(it.id, it.name, it.org, it.rawOrg)) },
+                        onOpenBucket = { nav.navigate(Route.Bucket(it.name, it.organization?.slug.orEmpty())) },
                         bottomBar = { bar(HomeTab.Data) },
+                    )
+                }
+                composable<Route.Bucket> { entry ->
+                    val route = entry.toRoute<Route.Bucket>()
+                    BucketScreen(
+                        koinViewModel { parametersOf(route.name) },
+                        title = route.name,
+                        onBack = { nav.popBackStack() },
+                        onOpenApp = { name -> nav.navigate(Route.App(name, route.org)) },
                     )
                 }
                 composable<Route.PostgresCluster> { entry ->

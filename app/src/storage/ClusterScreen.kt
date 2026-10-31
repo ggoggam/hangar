@@ -226,7 +226,7 @@ private fun address(endpoint: FlyPostgresEndpoint): String {
 
 /** An attached app, which opens its dashboard. */
 @Composable
-private fun AppRow(
+internal fun AppRow(
     name: String,
     onClick: () -> Unit,
 ) {

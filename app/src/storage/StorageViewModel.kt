@@ -8,6 +8,7 @@ import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.core.FlyAddOn
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyApp
+import dev.ggoggam.hangar.core.FlyBucket
 import dev.ggoggam.hangar.core.FlyManagedPostgres
 import dev.ggoggam.hangar.core.FlyOrganization
 import dev.ggoggam.hangar.core.FlyPostgresBackup
@@ -138,4 +139,35 @@ class ClusterViewModel(
         get: (ClusterState) -> Load<T>,
         set: (ClusterState, Load<T>) -> ClusterState,
     ): Job = viewModelScope.loadInto(_state, session, fetch, get, set)
+}
+
+data class BucketState(
+    val bucket: Load<FlyBucket> = Load.Loading,
+    val refreshing: Boolean = false,
+)
+
+/** One Tigris bucket, by [name], as `fly storage status` shows it. Read-only, and never its keys. */
+class BucketViewModel(
+    private val name: String,
+    private val http: HttpClient,
+    private val session: FlySession,
+) : ViewModel() {
+    private val _state = MutableStateFlow(BucketState())
+    val state: StateFlow<BucketState> = _state.asStateFlow()
+
+    init {
+        refresh(quiet = true)
+    }
+
+    /** Loads the bucket again; [quiet] keeps the pull-to-refresh spinner hidden. */
+    fun refresh(quiet: Boolean = false) {
+        if (session.token.value == null) return
+        if (!quiet) _state.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            viewModelScope
+                .loadInto(_state, session, { FlyApi(http, it).bucket(name) }, { it.bucket }) { s, v -> s.copy(bucket = v) }
+                .join()
+            _state.update { it.copy(refreshing = false) }
+        }
+    }
 }

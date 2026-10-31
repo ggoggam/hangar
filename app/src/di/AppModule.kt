@@ -12,6 +12,7 @@ import dev.ggoggam.hangar.app.settings.RegionsViewModel
 import dev.ggoggam.hangar.app.settings.SettingsViewModel
 import dev.ggoggam.hangar.app.settings.ThemeSettings
 import dev.ggoggam.hangar.app.status.IncidentFeed
+import dev.ggoggam.hangar.app.storage.BucketViewModel
 import dev.ggoggam.hangar.app.storage.ClusterViewModel
 import dev.ggoggam.hangar.app.storage.StorageViewModel
 import dev.ggoggam.hangar.app.watch.NotificationLinks
@@ -69,6 +70,7 @@ private val appModule =
         viewModel { AppsViewModel(get(), get(), get(), get()) }
         viewModel { StorageViewModel(get(), get()) }
         viewModel { (id: String, org: String, rawOrg: String) -> ClusterViewModel(id, FlyOrganization(org, rawOrg), get(), get()) }
+        viewModel { (name: String) -> BucketViewModel(name, get(), get()) }
         viewModel { SettingsViewModel(get(), get()) }
         viewModel { (slug: String) -> OrganizationViewModel(slug, get(), get()) }
         viewModel { RegionsViewModel(get(), get()) }
