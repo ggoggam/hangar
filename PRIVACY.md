@@ -39,8 +39,10 @@ itself and only tells the app whether it worked. None of them reach the app.
 
 ## What the app keeps on your device
 
-- Your Fly.io token: sealed under an Android Keystore key and left out of backups, or in the iOS
-  Keychain for this device only, so it never moves to another device.
+- Your Fly.io token, one for each account you sign in to, with that account's email address (or,
+  for an access token without a user, its organization's name) so you can tell your accounts apart
+  in Settings: sealed under an Android Keystore key and left out of backups, or in the iOS Keychain
+  for this device only, so they never move to another device.
 - Whether you picked dark or light mode, which notifications you want, the spend alert's amount if
   you set one, and whether the app lock is on.
 - For background checks, what the last check saw: the names of Fly.io's open incidents, which
@@ -49,7 +51,7 @@ itself and only tells the app whether it worked. None of them reach the app.
 - Which apps you pinned to the top of the app list, as one-way fingerprints of their names, which
   don't contain the names.
 
-Your email address, apps, logs and metrics are held in memory while they're on screen, as are
+Your apps, logs and metrics are held in memory while they're on screen, as are
 your secrets' names and digests; their values are never asked for. The same goes for your
 Managed Postgres databases' and users' names and hosts: the app never asks for their passwords or
 connection strings. The app
@@ -58,7 +60,7 @@ about, and your device keeps it until you dismiss it.
 
 ## Deleting your data
 
-Signing out deletes the token from your device. Uninstalling the app deletes everything it kept. To
+Signing out of an account deletes its token and email address from your device. Uninstalling the app deletes everything it kept. To
 end the login on Fly.io's side as well, revoke the token in your Fly.io account or with
 `fly tokens revoke`. The developer holds none of your data, so there is nothing else to delete.
 

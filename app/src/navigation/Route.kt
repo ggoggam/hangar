@@ -14,6 +14,10 @@ sealed interface Route {
     @Serializable
     data object Settings : Route
 
+    /** Signing in to another account, opened from Settings. */
+    @Serializable
+    data object AddAccount : Route
+
     /** One organization's members and tokens. [name] titles the screen until the organization loads. */
     @Serializable
     data class Organization(
@@ -63,6 +67,14 @@ sealed interface Route {
         val app: String,
         val org: String,
         val version: Int,
+    ) : Route
+
+    /** One of [app]'s volumes and its snapshots, opened from the dashboard's Overview, which it shares. */
+    @Serializable
+    data class Volume(
+        val app: String,
+        val org: String,
+        val id: String,
     ) : Route
 
     /** One of [app]'s hostnames and its certificates, opened from the dashboard's Overview. */

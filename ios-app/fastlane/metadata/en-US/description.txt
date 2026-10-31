@@ -4,7 +4,7 @@ Hangar isn't made by or affiliated with Fly.io.
 
 WHAT IT SHOWS
 • Your apps across every organization, with an estimate of each organization's usage over the last 14 days and each app's share of it, a search, and the apps you pin at the top
-• Each app's overview: status, hostname, volumes and how full they are, IP addresses and certificates, with the DNS records each hostname needs and what's holding up one that isn't verified
+• Each app's overview: status, hostname, volumes with how full they are and their snapshots, IP addresses and certificates, with the DNS records each hostname needs and what's holding up one that isn't verified
 • Metrics from Fly.io's managed Prometheus: CPU, memory, requests, errors and p95 latency over 1, 6 or 24 hours
 • Machines, with their region, size, state and health checks, and each one's details: image, private IP, volumes, services, check output and recent events such as exits and out-of-memory kills
 • The last 25 releases, each with who deployed it, its image and whether the image changed
@@ -20,9 +20,9 @@ Turn on background checks in Settings and Hangar notifies you of new Fly.io inci
 Hangar can also start, stop, suspend and restart machines, and restart a whole app one machine at a time, asking first each time. It can't deploy, scale or delete anything.
 
 SIGNING IN
-Sign in on fly.io in your browser, the same way fly auth login does, and paste the code Fly.io shows. Or paste an access token: a read-only one is enough (fly tokens create readonly your-org). No account yet? Try the demo, which opens every screen on sample data.
+Sign in on fly.io in your browser, the same way fly auth login does, and paste the code Fly.io shows. Or paste an access token: a read-only one is enough (fly tokens create readonly your-org). Sign in to more than one Fly.io account and switch between them in Settings. No account yet? Try the demo, which opens every screen on sample data.
 
 PRIVACY
-Hangar talks to Fly.io and nothing else. It has no analytics, ads, crash reporting or tracking, and the developer runs no server. Your token stays in the iOS Keychain, on this device only. Hangar is open source, so you can check this yourself: https://github.com/ggoggam/hangar
+Hangar talks to Fly.io and nothing else. It has no analytics, ads, crash reporting or tracking, and the developer runs no server. Your tokens stay in the iOS Keychain, on this device only. Hangar is open source, so you can check this yourself: https://github.com/ggoggam/hangar
 
 Fly.io is a trademark of Fly.io, Inc.

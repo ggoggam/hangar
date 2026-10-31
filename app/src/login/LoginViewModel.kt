@@ -13,9 +13,12 @@ import dev.ggoggam.hangar.core.FlyToken
 import dev.ggoggam.hangar.core.PendingLogin
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -41,6 +44,11 @@ class LoginViewModel(
     private val _state = MutableStateFlow(LoginState())
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
+    private val _signedIn = Channel<Unit>(Channel.CONFLATED)
+
+    /** Each sign-in that finished, for adding an account, which closes when one does. */
+    val signedIn: Flow<Unit> = _signedIn.receiveAsFlow()
+
     /** Starts a login and hands its approval page to [open]. */
     fun start(open: (String) -> Unit) =
         run {
@@ -52,7 +60,7 @@ class LoginViewModel(
     fun redeem(code: String) {
         val pending = _state.value.pending ?: return
         if (code.isBlank()) return
-        run { finish(login.redeem(pending, code)) }
+        run { finish(login.redeem(pending, code), live = true) }
     }
 
     fun useToken(raw: String) {
@@ -62,21 +70,47 @@ class LoginViewModel(
         run {
             val renewed = discharges.refresh(token, Clock.System.now().epochSeconds)
             FlyApi(http, renewed).overview()
-            finish(renewed)
+            finish(renewed, live = true)
         }
     }
 
     /** Signs in to the demo, which answers from sample data built into the app. */
-    fun tryDemo() = finish(DEMO_TOKEN)
+    fun tryDemo() = run { finish(DEMO_TOKEN, live = false) }
 
     fun showTokenEntry(on: Boolean) = _state.update { LoginState(tokenEntry = on) }
 
     fun startOver() = _state.update { LoginState() }
 
-    private fun finish(token: FlyToken) {
+    /** Signs in with [token], named for the account switcher when it's a [live] account. */
+    private suspend fun finish(
+        token: FlyToken,
+        live: Boolean,
+    ) {
+        val label = if (live) label(token) else null
         _state.value = LoginState()
-        session.signIn(token)
+        session.signIn(token, label)
+        _signedIn.trySend(Unit)
     }
+
+    /**
+     * What the account switcher calls [token]'s account: its email, or for a token without a user,
+     * such as an organization's read-only one, the organization's name. Null when neither loads,
+     * which doesn't stop the sign-in.
+     */
+    private suspend fun label(token: FlyToken): String? {
+        val api = FlyApi(http, token)
+        return attempt { api.whoami().ifEmpty { null } }
+            ?: attempt { api.organizations().firstOrNull()?.let { it.name ?: it.slug } }
+    }
+
+    private suspend fun <T> attempt(block: suspend () -> T?): T? =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
 
     private fun run(block: suspend () -> Unit) {
         if (_state.value.busy) return

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.ggoggam.hangar.app.dashboard.Load
 import dev.ggoggam.hangar.app.dashboard.loadInto
+import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.core.FlyAccessToken
+import dev.ggoggam.hangar.core.FlyAccount
 import dev.ggoggam.hangar.core.FlyApi
 import dev.ggoggam.hangar.core.FlyMachines
 import dev.ggoggam.hangar.core.FlyOrganization
@@ -15,13 +17,17 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class SettingsState(
     val email: Load<String> = Load.Loading,
     val organizations: Load<List<FlyOrganization>> = Load.Loading,
 )
 
-/** The settings tab's account and organizations: `fly auth whoami` and `fly orgs list`. */
+/**
+ * The settings tab's account and organizations, `fly auth whoami` and `fly orgs list`, and the
+ * other accounts signed in on this device.
+ */
 class SettingsViewModel(
     private val http: HttpClient,
     private val session: FlySession,
@@ -29,12 +35,25 @@ class SettingsViewModel(
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+    /** Every account signed in on this device, the current one among them. */
+    val accounts: StateFlow<List<FlyAccount>> = session.accounts
+
     init {
-        viewModelScope.loadInto(_state, session, { FlyApi(http, it).whoami() }, { it.email }) { s, v -> s.copy(email = v) }
+        // The screens start afresh for each account (see App), so this is the account they show.
+        val account = session.accounts.value.firstOrNull { it.current }
+        val email = viewModelScope.loadInto(_state, session, { FlyApi(http, it).whoami() }, { it.email }) { s, v -> s.copy(email = v) }
+        // An account from before accounts had names gets its email once it's known.
+        viewModelScope.launch {
+            email.join()
+            val known = _state.value.email.value
+            if (account != null && account.label == null && !account.demo && !known.isNullOrEmpty()) session.setLabel(account.id, known)
+        }
         viewModelScope.loadInto(_state, session, { FlyApi(http, it).organizations() }, { it.organizations }) { s, v ->
             s.copy(organizations = v)
         }
     }
+
+    fun switchTo(account: FlyAccount) = session.switchTo(account.id)
 
     fun signOut() = session.signOut()
 }

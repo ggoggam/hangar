@@ -4,6 +4,7 @@ import dev.ggoggam.hangar.app.apps.AppPins
 import dev.ggoggam.hangar.app.apps.AppsViewModel
 import dev.ggoggam.hangar.app.dashboard.AppDashboardViewModel
 import dev.ggoggam.hangar.app.dashboard.CertificateViewModel
+import dev.ggoggam.hangar.app.dashboard.VolumeViewModel
 import dev.ggoggam.hangar.app.lock.AppLock
 import dev.ggoggam.hangar.app.login.LoginViewModel
 import dev.ggoggam.hangar.app.settings.OrganizationViewModel
@@ -73,6 +74,7 @@ private val appModule =
         viewModel { RegionsViewModel(get(), get()) }
         viewModel { (app: String, org: String) -> AppDashboardViewModel(app, org, get(), get()) }
         viewModel { (app: String, hostname: String) -> CertificateViewModel(app, hostname, get(), get()) }
+        viewModel { (app: String, id: String) -> VolumeViewModel(app, id, get(), get()) }
     }
 
 /**
