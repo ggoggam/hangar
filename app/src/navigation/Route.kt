@@ -65,6 +65,14 @@ sealed interface Route {
         val version: Int,
     ) : Route
 
+    /** One of [app]'s volumes and its snapshots, opened from the dashboard's Overview, which it shares. */
+    @Serializable
+    data class Volume(
+        val app: String,
+        val org: String,
+        val id: String,
+    ) : Route
+
     /** One of [app]'s hostnames and its certificates, opened from the dashboard's Overview. */
     @Serializable
     data class Certificate(

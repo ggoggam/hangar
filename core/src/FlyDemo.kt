@@ -132,6 +132,11 @@ private class FlyDemo(
                     if (it.groupValues[1] != MPG["id"]) throw NotInDemo()
                     return managedPostgresCluster(it.groupValues[2])
                 }
+                VOLUME_SNAPSHOTS.matchEntire(path)?.let {
+                    val app = app(it.groupValues[1])
+                    val volume = app.volumes.firstOrNull { v -> v.id == it.groupValues[2] } ?: throw NotInDemo()
+                    return j(snapshots(volume))
+                }
                 CERTIFICATE.matchEntire(path)?.let {
                     val app = app(it.groupValues[1])
                     val hostname = it.groupValues[2].decodeURLPart()
@@ -585,12 +590,40 @@ private class FlyDemo(
             "state" to "created",
             "size_gb" to v.sizeGb,
             "region" to v.region,
+            "zone" to fingerprint(v.region, v.machine).take(4),
             "encrypted" to true,
             "attached_machine_id" to v.machine,
             "created_at" to iso(now - 41 * DAY),
             "bytes_used" to (total * v.used).toLong(),
             "bytes_total" to total,
+            "snapshot_retention" to SNAPSHOT_RETENTION_DAYS,
+            "auto_backup_enabled" to v.dailySnapshots,
         )
+    }
+
+    /**
+     * A volume's daily snapshots, as Fly.io takes them: one a night for as many days as it keeps
+     * them, oldest first, each about as big as what the volume held then. None when they're off.
+     */
+    private fun snapshots(v: DemoVolume): List<Map<String, Any?>> {
+        if (!v.dailySnapshots) return emptyList()
+        val total = v.sizeGb * 1_000_000_000L
+        // Within the hour after 03:00 UTC: this morning's, or yesterday's until 04:00.
+        val latest = (now - 4 * HOUR) / DAY * DAY + 3 * HOUR + (noise(v.id.hashCode(), 0) * HOUR).toLong()
+        return (SNAPSHOT_RETENTION_DAYS - 1 downTo 0).map { daysBack ->
+            val takenAt = latest - daysBack * DAY
+            // A little less in it each day further back.
+            val held = total * v.used * (1 - 0.012 * daysBack)
+            mapOf(
+                "id" to "vs_${fingerprint(v.id, "$takenAt")}",
+                "size" to (held * (0.55 + 0.05 * noise(v.id.hashCode(), takenAt))).toLong(),
+                "volume_size" to total,
+                "digest" to fingerprint(v.id, "$takenAt", "digest") + fingerprint(v.id, "$takenAt", "sha"),
+                "created_at" to iso(takenAt),
+                "status" to "created",
+                "retention_days" to SNAPSHOT_RETENTION_DAYS,
+            )
+        }
     }
 
     private fun ips(app: DemoApp) =
@@ -884,6 +917,7 @@ private class FlyDemo(
         val MANAGED_POSTGRES = Regex("/v1/postgres/([^/]+)(|/databases|/users|/backups)")
         val MACHINES_API = Regex("/v1/apps/([^/]+)/(machines|volumes|ip_assignments|certificates|secrets)")
         val CERTIFICATE = Regex("/v1/apps/([^/]+)/certificates/([^/]+)")
+        val VOLUME_SNAPSHOTS = Regex("/v1/apps/([^/]+)/volumes/([^/]+)/snapshots")
         val MACHINE = Regex("/v1/apps/([^/]+)/machines/([^/]+)(|/lease|/wait|/start|/stop|/suspend|/restart)")
         val APP = Regex("/v1/apps/([^/]+)")
         val OPERATION = Regex("""query\s+(\w+)""")
@@ -892,6 +926,9 @@ private class FlyDemo(
 
         const val HOUR = 3_600L
         const val DAY = 86_400L
+
+        /** Fly.io's default, which `fly volumes create` sets unless told otherwise. */
+        const val SNAPSHOT_RETENTION_DAYS = 5
     }
 }
 
@@ -971,6 +1008,8 @@ private class DemoVolume(
     val region: String,
     val machine: String,
     val used: Double,
+    /** Whether Fly.io snapshots it every night, as it does unless they're turned off. */
+    val dailySnapshots: Boolean = true,
 )
 
 private class DemoApp(
@@ -1164,7 +1203,8 @@ private val APPS =
             volumes =
                 listOf(
                     DemoVolume("vol_4y5x9k2d1v0r8q3n", "pg_data", 10, "nrt", "2865117b0e3d48", 0.37),
-                    DemoVolume("vol_8n2q7m4w6z1p0k5t", "pg_data", 10, "nrt", "4d89ee5c27a106", 0.37),
+                    // The replica's snapshots are off, so the demo has a volume with none.
+                    DemoVolume("vol_8n2q7m4w6z1p0k5t", "pg_data", 10, "nrt", "4d89ee5c27a106", 0.37, dailySnapshots = false),
                 ),
             cpuPercent = 9.0,
             memoryShare = 0.48,
