@@ -12,7 +12,7 @@ settings:
     # The one place a release is decided: merging a new versionName to main tags v<versionName> and
     # releases it. versionCode isn't kept here. Release Android works it out and writes it in, and
     # other builds get Amper's default, 1. See RELEASING.md.
-    versionName: "0.3.0"
+    versionName: "0.3.1"
     # Release builds are signed with the upload key in keystore.properties, which only the release
     # workflow writes. Without it they build unsigned, with a warning.
     signing:
