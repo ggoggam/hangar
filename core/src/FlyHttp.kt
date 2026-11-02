@@ -21,6 +21,9 @@ const val FLY_API_URL = "https://api.fly.io"
 /** The Machines API (flyctl's "flaps"), which also serves volumes, IPs and certificates. */
 const val FLY_MACHINES_URL = "https://api.machines.dev"
 
+/** Fly.io's status page, whose Statuspage-style API lists the incidents open on it. */
+const val FLY_STATUS_URL = "https://status.flyio.net"
+
 /** Fly.io's incident feed behind `fly incidents list`, an app of Fly.io's own (fly-incidents.fly.dev). */
 const val FLY_INCIDENTS_URL = "https://incidents.flyio.net"
 

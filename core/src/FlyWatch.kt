@@ -27,6 +27,7 @@ class FlyWatch(
     private val session: FlySession,
     private val apiUrl: String = FLY_API_URL,
     private val machinesUrl: String = FLY_MACHINES_URL,
+    private val statusUrl: String = FLY_STATUS_URL,
     private val incidentsUrl: String = FLY_INCIDENTS_URL,
 ) {
     /**
@@ -45,7 +46,7 @@ class FlyWatch(
             // Another account's state, after signing in as someone else, says nothing about this one's.
             val account = fingerprint(session.token.value?.identity ?: "")
             val previous = previous?.takeIf { it.account == account }
-            val incidents = async { runCatchingFly { FlyIncidents(http, incidentsUrl).active() } }
+            val incidents = async { runCatchingFly { FlyIncidents(http, statusUrl, incidentsUrl).active() } }
             val billing = async { if (options.billing) runCatchingFly { billingStatuses() } else null }
             val allApps = session.authorized { FlyApi(http, it, apiUrl).overview() }.apps
             val spendDue =

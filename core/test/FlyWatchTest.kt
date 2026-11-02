@@ -54,7 +54,7 @@ class FlyWatchTest {
                                 HttpStatusCode.Unauthorized to "{}"
                             }
 
-                            path == "/v1/incidents" -> {
+                            path == "/api/v2/summary.json" || path == "/v1/incidents" -> {
                                 incidentsStatus to """{"incidents":$incidents}"""
                             }
 
