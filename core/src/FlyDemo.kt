@@ -150,6 +150,10 @@ private class FlyDemo(
                 }
             }
 
+            STATUS_HOST -> {
+                if (path == "/api/v2/summary.json") obj("incidents" to emptyList<Any>()) else null
+            }
+
             INCIDENTS_HOST -> {
                 if (path == "/v1/incidents") obj("incidents" to emptyList<Any>()) else null
             }
@@ -934,6 +938,7 @@ private class FlyDemo(
     private companion object {
         val API_HOST = Url(FLY_API_URL).host
         val MACHINES_HOST = Url(FLY_MACHINES_URL).host
+        val STATUS_HOST = Url(FLY_STATUS_URL).host
         val INCIDENTS_HOST = Url(FLY_INCIDENTS_URL).host
 
         val LOGS = Regex("/api/v1/apps/([^/]+)/logs")
