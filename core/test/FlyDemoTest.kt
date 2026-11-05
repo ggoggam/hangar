@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /** Every call the screens make, against the demo: each must answer, as Google Play's reviewers only see the demo. */
 class FlyDemoTest {
@@ -163,6 +164,23 @@ class FlyDemoTest {
             assertTrue(next.entries.none { e -> first.entries.any { it.id == e.id } })
             // The same moment always logs the same lines.
             assertEquals(first.entries.map { it.message }, FlyLogs(http, token).page("web", cursor = null).entries.map { it.message })
+        }
+
+    @Test
+    fun logsReadBackFromTheOldestLineWithoutAGap() =
+        runTest {
+            val logs = FlyLogs(http, token)
+            val latest = logs.page("web", cursor = null).entries
+            val older = logs.older("web", latest)
+            assertTrue(older.isNotEmpty())
+            assertTrue(older.none { e -> latest.any { it.id == e.id } })
+            val joined = (older + latest).map { Instant.parse(it.timestamp) }
+            assertEquals(joined.sorted(), joined)
+            // Reading straight through from the first of them finds nothing they skipped.
+            val fromFirst = logs.page("web", "${joined.first().epochSeconds * 1_000_000_000 - 1}").entries
+            assertEquals((older + latest).take(fromFirst.size).map { it.id }, fromFirst.map { it.id })
+            // And there's more again before those.
+            assertTrue(logs.older("web", older + latest).isNotEmpty())
         }
 
     @Test

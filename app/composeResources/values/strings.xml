@@ -223,6 +223,11 @@
     <string name="logs_problems">Errors &amp; warnings</string>
     <string name="logs_matches">%1$d of the last %2$d lines</string>
     <string name="logs_no_matches">No matching lines in the last %1$d. New ones are searched as they come in.</string>
+    <string name="logs_older_loading">Loading older lines…</string>
+    <string name="logs_older_load">Load older lines</string>
+    <string name="logs_older_failed">Couldn't load older lines. Tap to retry.</string>
+    <string name="logs_older_none">No older lines. Fly.io keeps about 7 days of logs.</string>
+    <string name="logs_older_full">Showing the newest %1$d lines</string>
     <string name="time_just_now">just now</string>
     <string name="time_minutes_ago">%1$d min ago</string>
     <string name="time_hours_ago">%1$d h ago</string>

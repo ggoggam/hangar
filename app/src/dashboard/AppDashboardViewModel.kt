@@ -145,12 +145,23 @@ enum class ActionFailure {
     Other,
 }
 
+/** How reading further back than the lines held is going. */
+enum class OlderLogs { Idle, Loading, Failed, NoneLeft }
+
+/** The most log lines held at once. The oldest go first, so what's held never has a gap in it. */
+const val MAX_LOG_LINES = 5_000
+
 data class LogsState(
     val entries: List<FlyLogEntry> = emptyList(),
     /** The machine the logs are narrowed to, or null for all of them. */
     val instance: String? = null,
     val failing: Boolean = false,
-)
+    val older: OlderLogs = OlderLogs.Idle,
+    /** The latest lines have come back at least once, so having none means there are none lately. */
+    val caughtUp: Boolean = false,
+) {
+    val full: Boolean get() = entries.size >= MAX_LOG_LINES
+}
 
 /**
  * One app's dashboard: `fly status`, `fly incidents hosts list`, `fly machines list`, `fly releases`,
@@ -175,6 +186,7 @@ class AppDashboardViewModel(
     val notices: Flow<ActionNotice> = _notices.receiveAsFlow()
 
     private var logCursor: String? = null
+    private var olderLogsJob: Job? = null
     private var metricsJob: Job? = null
 
     init {
@@ -335,7 +347,36 @@ class AppDashboardViewModel(
     fun setLogInstance(instance: String?) {
         if (instance == _logs.value.instance) return
         logCursor = null
+        olderLogsJob?.cancel()
         _logs.value = LogsState(instance = instance)
+    }
+
+    /** Reads the lines before the ones held, unless that's under way or there's no room for them. */
+    fun loadOlderLogs() {
+        val start = _logs.value
+        if (!start.caughtUp || start.full || start.older == OlderLogs.Loading || start.older == OlderLogs.NoneLeft) return
+        _logs.update { it.copy(older = OlderLogs.Loading) }
+        olderLogsJob =
+            viewModelScope.launch {
+                try {
+                    // Not authorized(), which signs out when Fly.io turns a call down twice: looking
+                    // further back is optional, so a refusal here is only a failed load to retry.
+                    val token = session.fresh() ?: throw FlyApiException.Unauthorized()
+                    val older = FlyLogs(http, token).older(appName, start.entries, start.instance)
+                    _logs.update { s ->
+                        val held = s.entries.mapTo(HashSet()) { it.id }
+                        val fresh = older.filter { it.id.isEmpty() || it.id !in held }
+                        s.copy(
+                            entries = (fresh + s.entries).takeLast(MAX_LOG_LINES),
+                            older = if (older.isEmpty()) OlderLogs.NoneLeft else OlderLogs.Idle,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _logs.update { it.copy(older = OlderLogs.Failed) }
+                }
+            }
     }
 
     /**
@@ -355,7 +396,7 @@ class AppDashboardViewModel(
                     // add() also drops a line repeated within the page: Fly.io sometimes sends one twice,
                     // and the list keys lines by id.
                     val fresh = page.entries.filter { it.id.isEmpty() || seen.add(it.id) }
-                    s.copy(entries = (s.entries + fresh).takeLast(MAX_LOG_LINES), failing = false)
+                    s.copy(entries = (s.entries + fresh).takeLast(MAX_LOG_LINES), failing = false, caughtUp = true)
                 }
                 if (page.entries.isNotEmpty()) {
                     idle = 1_000L
@@ -373,9 +414,5 @@ class AppDashboardViewModel(
                 delay(5_000)
             }
         }
-    }
-
-    private companion object {
-        const val MAX_LOG_LINES = 1_000
     }
 }
