@@ -762,6 +762,7 @@ private class FlyDemo(
         }
 
     // Logs: a line every few seconds from each running machine, the same lines for the same moment.
+    // Cursors are times in nanoseconds, as Fly.io's are, and history goes back as far as Fly.io keeps it.
 
     private fun logs(
         app: DemoApp,
@@ -769,8 +770,9 @@ private class FlyDemo(
         instance: String?,
     ): JsonElement {
         val machines = app.machines.filter { stateOf(it) == "started" && (instance == null || it.id == instance) }
-        val since = cursor?.removePrefix("demo-")?.toLongOrNull()
+        val since = cursor?.toLongOrNull()?.let { it / 1_000_000_000 }
         val entries = mutableListOf<Map<String, Any?>>()
+        var reached = now
         if (machines.isNotEmpty()) {
             if (since == null) {
                 // The latest page: back from now until it holds 60 lines.
@@ -780,10 +782,13 @@ private class FlyDemo(
                     s--
                 }
             } else {
-                for (s in (since + 1)..now) entries += linesAt(app, machines, s)
+                // A page from then on, up to where it fills.
+                var s = maxOf(since + 1, now - 7 * DAY)
+                while (s <= now && entries.size < 100) entries += linesAt(app, machines, s++)
+                reached = s - 1
             }
         }
-        return obj("data" to entries.takeLast(100), "meta" to mapOf("next_token" to "demo-$now"))
+        return obj("data" to entries, "meta" to mapOf("next_token" to "${reached * 1_000_000_000}"))
     }
 
     private fun linesAt(

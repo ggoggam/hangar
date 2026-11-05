@@ -223,6 +223,11 @@
     <string name="logs_problems">오류·경고</string>
     <string name="logs_matches">최근 %2$d줄 중 %1$d줄</string>
     <string name="logs_no_matches">최근 %1$d줄 중 일치하는 줄이 없어요. 새 로그도 들어오는 대로 찾아요.</string>
+    <string name="logs_older_loading">이전 로그를 불러오는 중…</string>
+    <string name="logs_older_load">이전 로그 불러오기</string>
+    <string name="logs_older_failed">이전 로그를 불러오지 못했어요. 탭해서 다시 시도하세요.</string>
+    <string name="logs_older_none">이전 로그가 없어요. Fly.io는 로그를 약 7일간 보관해요.</string>
+    <string name="logs_older_full">최신 %1$d줄을 표시하고 있어요</string>
     <string name="time_just_now">방금</string>
     <string name="time_minutes_ago">%1$d분 전</string>
     <string name="time_hours_ago">%1$d시간 전</string>

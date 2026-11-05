@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -83,9 +85,9 @@ import kotlinx.serialization.json.jsonObject
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * `fly logs`, following new lines while the tab is open, optionally narrowed to one machine. The
- * search and the errors filter look through the lines received since the tab opened, as the
- * dashboard's live logs do, since Fly.io's logs API has no search of its own.
+ * `fly logs`, following new lines while the tab is open, optionally narrowed to one machine, with
+ * older lines read in as the list nears its top. The search and the errors filter look through the
+ * lines held, as the dashboard's live logs do, since Fly.io's logs API has no search of its own.
  */
 @Composable
 internal fun LogsTab(
@@ -143,10 +145,21 @@ internal fun LogsTab(
         when {
             lines.isEmpty() -> {
                 Muted(stringResource(Res.string.logs_waiting), Modifier.padding(16.dp))
+                // Nothing lately leaves no list to scroll up, so this looks further back by itself.
+                LaunchedEffect(logs.caughtUp, filtering, logs.older) {
+                    if (logs.caughtUp && !filtering && logs.older == OlderLogs.Idle) vm.loadOlderLogs()
+                }
+                OlderLogsStatus(
+                    logs,
+                    offerToLoad = filtering && logs.caughtUp,
+                    vm::loadOlderLogs,
+                    Modifier.align(Alignment.CenterHorizontally),
+                )
             }
 
             filtering && shown.isEmpty() -> {
                 Muted(stringResource(Res.string.logs_no_matches, lines.size), Modifier.padding(16.dp))
+                OlderLogsStatus(logs, offerToLoad = true, vm::loadOlderLogs, Modifier.align(Alignment.CenterHorizontally))
             }
 
             else -> {
@@ -156,7 +169,14 @@ internal fun LogsTab(
                         Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
                     )
                 }
-                LogLines(shown, query.trim(), showInstance = logs.instance == null && machines.size != 1)
+                LogLines(
+                    shown,
+                    query.trim(),
+                    showInstance = logs.instance == null && machines.size != 1,
+                    logs,
+                    filtering,
+                    vm::loadOlderLogs,
+                )
             }
         }
     }
@@ -222,6 +242,9 @@ private fun LogLines(
     items: List<LogItem>,
     query: String,
     showInstance: Boolean,
+    logs: LogsState,
+    filtering: Boolean,
+    onLoadOlder: () -> Unit,
 ) {
     val list = rememberLazyListState()
     // Stay pinned to the newest line until the user scrolls up to read, like a terminal.
@@ -235,8 +258,22 @@ private fun LogLines(
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress to atEnd }.collect { (scrolling, end) -> if (scrolling) follow = end }
     }
-    LaunchedEffect(items.size, query) {
+    // Keyed on the newest line, not how many there are: at the limit, that stays the same.
+    LaunchedEffect(items.lastOrNull()?.entry, query) {
         if (follow && items.isNotEmpty()) list.scrollToItem(items.lastIndex)
+    }
+
+    val atTop by remember { derivedStateOf { !list.canScrollBackward } }
+    // Scrolled up to near the top, or too few lines to scroll at all. A filter can leave that so
+    // however many lines come in, and shouldn't read back through days of logs by itself, so with
+    // one on, older lines only come in when asked for.
+    val wantsOlder by remember {
+        derivedStateOf {
+            list.firstVisibleItemIndex < OLDER_LOGS_AHEAD && (!follow || !(list.canScrollForward || list.canScrollBackward))
+        }
+    }
+    LaunchedEffect(wantsOlder, filtering, logs.older, items.size) {
+        if (wantsOlder && !filtering && logs.older == OlderLogs.Idle) onLoadOlder()
     }
 
     val clipboard = LocalClipboard.current
@@ -254,30 +291,80 @@ private fun LogLines(
         Unit
     }
 
-    Box(Modifier.fillMaxSize()) {
-        // A tap copies the whole line; a long press still selects part of one.
-        SelectionContainer {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                state = list,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                itemsIndexed(items, key = { i, it -> it.entry.id.ifEmpty { "line:$i" } }) { _, it ->
-                    LogLine(it, query, showInstance) { copy(it.entry) }
+    // Above the list rather than over it, or it would hide the oldest line for good. Only loading
+    // goes over it, as that's over soon and shouldn't shift the lines as it comes and goes.
+    Column(Modifier.fillMaxSize()) {
+        if (atTop && logs.older != OlderLogs.Loading) {
+            OlderLogsStatus(logs, offerToLoad = filtering, onLoadOlder, Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))
+        }
+        Box(Modifier.weight(1f)) {
+            // A tap copies the whole line; a long press still selects part of one.
+            SelectionContainer {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    state = list,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    itemsIndexed(items, key = { i, it -> it.entry.id.ifEmpty { "line:$i" } }) { _, it ->
+                        LogLine(it, query, showInstance) { copy(it.entry) }
+                    }
                 }
             }
-        }
-        // Programmatic scrolls count as scrolling, so reaching the end this way follows again.
-        Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)) {
-            ScrollButton(list.canScrollBackward, Lucide.ArrowUp, stringResource(Res.string.logs_to_top)) {
-                scope.launch { list.animateScrollToItem(0) }
+            // Programmatic scrolls count as scrolling, so reaching the end this way follows again.
+            Column(Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)) {
+                ScrollButton(list.canScrollBackward, Lucide.ArrowUp, stringResource(Res.string.logs_to_top)) {
+                    scope.launch { list.animateScrollToItem(0) }
+                }
+                ScrollButton(list.canScrollForward, Lucide.ArrowDown, stringResource(Res.string.logs_to_bottom)) {
+                    scope.launch { list.animateScrollToItem(items.lastIndex) }
+                }
             }
-            ScrollButton(list.canScrollForward, Lucide.ArrowDown, stringResource(Res.string.logs_to_bottom)) {
-                scope.launch { list.animateScrollToItem(items.lastIndex) }
+            if (atTop && logs.older == OlderLogs.Loading) {
+                OlderLogsStatus(logs, offerToLoad = false, onLoadOlder, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
             }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/** Lines from the top of the list at which to start reading older ones, before the user gets there. */
+private const val OLDER_LOGS_AHEAD = 20
+
+/** Where reading older lines has got to, with a way to retry, or to start when [offerToLoad]. */
+@Composable
+private fun OlderLogsStatus(
+    logs: LogsState,
+    offerToLoad: Boolean,
+    onLoad: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tappable = !logs.full && (logs.older == OlderLogs.Failed || (logs.older == OlderLogs.Idle && offerToLoad))
+    val label =
+        when {
+            logs.full -> stringResource(Res.string.logs_older_full, MAX_LOG_LINES)
+            logs.older == OlderLogs.Loading -> stringResource(Res.string.logs_older_loading)
+            logs.older == OlderLogs.Failed -> stringResource(Res.string.logs_older_failed)
+            logs.older == OlderLogs.NoneLeft -> stringResource(Res.string.logs_older_none)
+            offerToLoad -> stringResource(Res.string.logs_older_load)
+            else -> return
+        }
+    Surface(
+        modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Row(
+            Modifier
+                .then(if (tappable) Modifier.clickable(onClick = onLoad) else Modifier)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (logs.older == OlderLogs.Loading && !logs.full) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            Text(label, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
