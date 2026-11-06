@@ -1,10 +1,16 @@
 # Built with the Kotlin Toolchain, not Gradle. The committed ./kotlin wrapper pins the toolchain
-# and provisions its own JDK, so the tools here are only for the style hooks and the font and icon
+# and provisions its own JDK, so the other tools here are only for the style hooks and the font and icon
 # builds. Xcode is the one prerequisite the wrapper can't provision, and only the iOS tasks need it.
 # The JDK ktlint wants on a CI runner is in mise.ci.toml, which mise merges over this file only
 # when MISE_ENV=ci.
+# kotlin-toolchain entered the mise registry in 2026.11.0; an older mise can't install this file.
+min_version = "2026.11.0"
+
 [tools]
 ktlint = "latest"
+# `kotlin` on PATH. It defers to the ./kotlin wrapper found upward, so that pin still picks the
+# toolchain version; this is only the entry point.
+kotlin-toolchain = "latest"
 # The `pre-commit` task shells out to prek, so it is declared here rather than assumed present:
 # `mise install` in a fresh clone should be enough to run the hooks.
 prek = "latest"
