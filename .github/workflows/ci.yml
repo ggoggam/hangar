@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           mise lock
           if ! git diff --exit-code -- mise.lock mise.ci.lock; then
-            echo "::error::mise.lock or mise.ci.lock is stale. Run \`MISE_ENV=ci mise lock\` and commit the result."
+            echo "::error::mise.lock or mise.ci.lock is stale. Run \`mise run lock\` and commit the result."
             exit 1
           fi
 
