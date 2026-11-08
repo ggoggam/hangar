@@ -1,7 +1,19 @@
 No account is needed to review Hangar. On the sign-in screen, tap "Try the demo": it opens every screen on sample data built into the app and connects to nothing.
 
-Signing in for real needs a Fly.io account (fly.io), a hosting platform for developers. Hangar shows the account's apps, machines, logs and metrics, and can start, stop, suspend and restart machines. It can't deploy, scale or delete anything. In the demo, those actions change only the sample data.
+PURPOSE AND AUDIENCE
+Hangar is an unofficial, open-source mobile client for Fly.io (fly.io), a hosting platform for developers. It's for developers who run apps on Fly.io and want to check on them away from a computer, which otherwise takes a laptop and the flyctl command-line tool. Hangar shows the account's apps, machines, logs and metrics, and can start, stop, suspend and restart machines. It can't deploy, scale or delete anything. In the demo, those actions change only the sample data.
 
+ACCESS
+Signing in for real needs a Fly.io account: sign in on fly.io in the system sign-in browser and paste the one-time code Fly.io shows, or paste a Fly.io access token. Accounts are created on fly.io, not in the app. There's no user-generated content and no paid content.
+
+EXTERNAL SERVICES
+Only Fly.io: api.fly.io, api.machines.dev and auth.fly.io for the account's data and sign-in, and status.flyio.net and incidents.flyio.net for public incident reports, read without a token. Links to status.fly.io and fly-metrics.net open in the browser. There's no developer-run server, analytics, crash reporting, advertising, payment processing, AI service or third-party SDK.
+
+BACKGROUND CHECKS
 Background checks (Settings > Notifications) use background app refresh (the "fetch" mode) to ask Fly.io's API for new incidents, problems with the account's apps, finished or failed deploys, volumes nearly full and billing problems, and post local notifications. There's no push server. The demo is never checked in the background.
 
-Hangar is an unofficial, open-source client (https://github.com/ggoggam/hangar). It isn't made by or affiliated with Fly.io.
+REGIONS
+The app works the same in all regions. The interface is in English and Korean.
+
+REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+Hangar isn't in a regulated industry. It shows only data the signed-in user already has access to in their own Fly.io account, through the API Fly.io provides to its customers. "Fly.io" is used only to name the service the app works with. Hangar isn't made by or affiliated with Fly.io. Source code: https://github.com/ggoggam/hangar
