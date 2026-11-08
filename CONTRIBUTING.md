@@ -6,7 +6,7 @@ and the JVM tests. iOS needs a Mac with Xcode 26.
 
 ```sh
 mise trust
-mise install               # ktlint and prek
+mise install               # ktlint, prek and the rest, at the versions in mise.lock
 mise exec -- prek install  # run the hooks on every commit
 mise run test              # core tests on the JVM
 mise run test:ios          # core tests on the iOS simulator (macOS)
@@ -21,7 +21,9 @@ mise run pre-commit        # what CI's pre-commit job runs
 ```
 
 CI runs pre-commit, the core tests on the JVM and the iOS simulator, and both app builds on every
-pull request. Releasing to Google Play and TestFlight is in [RELEASING.md](RELEASING.md).
+pull request. It also checks that mise.lock and mise.ci.lock match the configs: after adding or
+bumping a tool in mise.toml or mise.ci.toml, run `MISE_ENV=ci mise lock` and commit both
+lockfiles. Releasing to Google Play and TestFlight is in [RELEASING.md](RELEASING.md).
 
 ## Layout
 

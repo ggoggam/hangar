@@ -6,6 +6,19 @@
 # kotlin-toolchain entered the mise registry in 2026.11.0; an older mise can't install this file.
 min_version = "2026.11.0"
 
+[settings]
+# The "latest" requests below resolve to the exact versions, download URLs and checksums in
+# mise.lock (and mise.ci.lock for mise.ci.toml), which are committed. CI installs with --locked,
+# so a tool missing from the lock fails there instead of quietly installing whatever is newest.
+# After adding or bumping a tool, refresh both (the ci profile writes both files) and commit them:
+#   MISE_ENV=ci mise lock
+# It keeps the versions already pinned; add --bump to move them to the newest release.
+# CI's `mise lock` job reruns the refresh and fails on any diff.
+lockfile = true
+# Every platform the lock covers. A platform missing here has no entry, and a --locked install
+# on it fails.
+lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "windows-x64"]
+
 [tools]
 ktlint = "latest"
 # `kotlin` on PATH. It defers to the ./kotlin wrapper found upward, so that pin still picks the
