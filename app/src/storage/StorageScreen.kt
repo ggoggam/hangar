@@ -4,7 +4,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -34,6 +37,7 @@ import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.SectionTitle
 import dev.ggoggam.hangar.app.dashboard.section
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.navigation.homeBarClearance
 import dev.ggoggam.hangar.app.ui.StatusBadge
 import dev.ggoggam.hangar.app.ui.Tone
 import dev.ggoggam.hangar.app.ui.appStatusLabel
@@ -52,21 +56,21 @@ fun StorageScreen(
     onOpenApp: (FlyApp) -> Unit,
     onOpenCluster: (FlyPostgresCluster) -> Unit,
     onOpenBucket: (FlyAddOn) -> Unit,
-    bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     Scaffold(
+        // The tabs' island floats over the list, which runs to the bottom under it.
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.data_title)) },
             )
         },
-        bottomBar = bottomBar,
     ) { padding ->
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 32.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = homeBarClearance()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 titled(Res.string.data_mpg, state.managedPostgres, "mpg", key = { it.id }) { ClusterCard(it) { onOpenCluster(it) } }

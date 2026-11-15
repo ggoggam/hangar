@@ -30,6 +30,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.ggoggam.hangar.app.apps.AppsScreen
@@ -119,6 +120,8 @@ private fun SignedIn(lock: AppLock) {
 
     // Every open incident, until they're dismissed and none has opened since.
     val banner = incidents.orEmpty().takeIf { open -> open.any { it.id !in dismissed } }
+    val entry by nav.currentBackStackEntryAsState()
+    val tab = entry?.let { current -> HomeTab.entries.firstOrNull { current.destination.hasRoute(it.route::class) } }
     LockedBy(lock) {
         Column(Modifier.fillMaxSize()) {
             banner?.let { IncidentBanner(it, onOpen = { nav.openTab(HomeTab.Apps) }, onDismiss = feed::dismiss) }
@@ -144,9 +147,8 @@ private fun SignedIn(lock: AppLock) {
                 popExitTransition = { if (isTabSwitch()) fadeOut(Fade) else slideOutOfContainer(SlideDirection.End, Slide) },
             ) {
                 val openApp = { app: FlyApp -> nav.navigate(Route.App(app.name, app.organization.slug)) }
-                val bar = @Composable { current: HomeTab -> HomeBar(current) { nav.openTab(it) } }
                 composable<Route.Apps> {
-                    AppsScreen(koinViewModel(), onOpen = openApp, bottomBar = { bar(HomeTab.Apps) })
+                    AppsScreen(koinViewModel(), onOpen = openApp)
                 }
                 composable<Route.Storage> {
                     StorageScreen(
@@ -154,7 +156,6 @@ private fun SignedIn(lock: AppLock) {
                         onOpenApp = openApp,
                         onOpenCluster = { nav.navigate(Route.PostgresCluster(it.id, it.name, it.org, it.rawOrg)) },
                         onOpenBucket = { nav.navigate(Route.Bucket(it.name, it.organization?.slug.orEmpty())) },
-                        bottomBar = { bar(HomeTab.Data) },
                     )
                 }
                 composable<Route.Bucket> { entry ->
@@ -181,7 +182,6 @@ private fun SignedIn(lock: AppLock) {
                         onOrganization = { org -> nav.navigate(Route.Organization(org.slug, org.name ?: org.slug)) },
                         onRegions = { nav.navigate(Route.Regions) },
                         onAddAccount = { nav.navigate(Route.AddAccount) },
-                        bottomBar = { bar(HomeTab.Settings) },
                     )
                 }
                 composable<Route.AddAccount> {
@@ -240,6 +240,8 @@ private fun SignedIn(lock: AppLock) {
                 }
             }
         }
+        // Over the screens rather than in each one, so its marker slides while they fade under it.
+        HomeBar(tab, onSelect = nav::openTab, modifier = Modifier.fillMaxSize())
     }
 
     // A tapped notification's screen, once the graph above is set up and the app is

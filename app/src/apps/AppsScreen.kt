@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -53,6 +56,7 @@ import dev.ggoggam.hangar.app.dashboard.Load
 import dev.ggoggam.hangar.app.dashboard.Panel
 import dev.ggoggam.hangar.app.dashboard.value
 import dev.ggoggam.hangar.app.generated.resources.*
+import dev.ggoggam.hangar.app.navigation.homeBarClearance
 import dev.ggoggam.hangar.app.status.incidentList
 import dev.ggoggam.hangar.app.ui.ShimmerBar
 import dev.ggoggam.hangar.app.ui.StatusBadge
@@ -73,13 +77,14 @@ import org.jetbrains.compose.resources.stringResource
 fun AppsScreen(
     vm: AppsViewModel,
     onOpen: (FlyApp) -> Unit,
-    bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val incidents by vm.incidents.collectAsStateWithLifecycle()
     val pins by vm.pins.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     Scaffold(
+        // The tabs' island floats over the list, which runs to the bottom under it.
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
                 title = {
@@ -92,7 +97,6 @@ fun AppsScreen(
                 },
             )
         },
-        bottomBar = bottomBar,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.loading,
@@ -102,7 +106,7 @@ fun AppsScreen(
             val apps = state.apps
             // One list whatever the apps' state, so the incidents stay on top and pull-to-refresh
             // still works on an empty or failed list.
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = homeBarClearance())) {
                 incidentList(incidents)
                 when {
                     state.failed && apps == null -> {

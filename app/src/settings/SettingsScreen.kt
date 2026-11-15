@@ -3,8 +3,10 @@ package dev.ggoggam.hangar.app.settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +52,7 @@ import com.composables.icons.lucide.UserPlus
 import dev.ggoggam.hangar.app.LocalStatusColors
 import dev.ggoggam.hangar.app.generated.resources.*
 import dev.ggoggam.hangar.app.lock.AppLock
+import dev.ggoggam.hangar.app.navigation.homeBarClearance
 import dev.ggoggam.hangar.app.session.rememberDeviceAuth
 import dev.ggoggam.hangar.app.ui.percent
 import dev.ggoggam.hangar.app.ui.usd
@@ -74,7 +78,6 @@ fun SettingsScreen(
     onOrganization: (FlyOrganization) -> Unit,
     onRegions: () -> Unit,
     onAddAccount: () -> Unit,
-    bottomBar: @Composable () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val accounts by vm.accounts.collectAsStateWithLifecycle()
@@ -88,10 +91,11 @@ fun SettingsScreen(
         SignOutDialog(next = others.firstOrNull(), onConfirm = vm::signOut, onDismiss = { confirmSignOut = false })
     }
     Scaffold(
+        // The tabs' island floats over the list, which runs to the bottom under it.
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = { TopAppBar(title = { Text(stringResource(Res.string.settings_title)) }) },
-        bottomBar = bottomBar,
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = homeBarClearance())) {
             item(key = "account") { Header(stringResource(Res.string.settings_account)) }
             rows(state.email, "email") { email ->
                 item(key = "email") {
