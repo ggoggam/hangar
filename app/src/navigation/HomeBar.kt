@@ -124,8 +124,10 @@ private fun TabIsland(
 ) {
     Surface(
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        // White on a grey marker in light, as in Sokuri; Hangar's surfaceContainerHigh is greyer than
+        // its surfaceVariant, which would leave the marker lighter than the island.
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 6.dp,
         modifier = Modifier.fillMaxWidth().height(BAR_HEIGHT),
     ) {
