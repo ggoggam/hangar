@@ -7,6 +7,10 @@ What Google Play's store listing shows, kept here so they can be made again.
 - `screenshots/` are the demo ("Try the demo") on the `small_phone` emulator at 1080 x 1920
   (`adb shell wm size 1080x1920`, `wm density 420`), with the status bar in Android's demo mode.
   They show only the demo's sample data, never a real account.
+- `badges/` are the stores' own badges for the top of the README:
+  [Google Play's](https://play.google.com/intl/en_us/badges/) and
+  [Apple's](https://toolbox.marketingtools.apple.com/), both at 40 px tall. Google's PNG comes
+  with clear space around it, cropped off here so the two line up.
 
 The App Store's listing lives with fastlane, in `ios-app/fastlane/`:
 
