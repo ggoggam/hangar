@@ -12,6 +12,11 @@
 </p>
 
 <p align="center">
+  <a href="https://play.google.com/store/apps/details?id=dev.ggoggam.hangar"><img src="store/badges/google-play.png" height="40" alt="Get it on Google Play"></a>
+  <a href="https://apps.apple.com/app/hangar-fly-io-client/id6827509966"><img src="store/badges/app-store.svg" height="40" alt="Download on the App Store"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/ggoggam/hangar/actions/workflows/ci.yml"><img src="https://github.com/ggoggam/hangar/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-171717" alt="Platforms: Android and iOS">
   <img src="https://img.shields.io/badge/Kotlin-Compose%20Multiplatform-171717?logo=kotlin&logoColor=white" alt="Kotlin, Compose Multiplatform">
