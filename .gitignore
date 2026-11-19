@@ -11,3 +11,5 @@ android-app/*.keystore
 ios-app/fastlane/report.xml
 ios-app/fastlane/README.md
 ios-app/fastlane/test_output/
+# Store release notes, written at release time by .github/scripts/release-notes.py.
+ios-app/fastlane/metadata/*/release_notes.txt

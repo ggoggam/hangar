@@ -77,11 +77,16 @@ platform :ios do
       clean: true
     )
 
+    # "What to Test": the version, then the release notes Release iOS wrote into fastlane/metadata
+    # (.github/scripts/release-notes.py), the same text Play gets. A run without them, from a
+    # laptop say, gets the version alone.
+    notes_path = File.expand_path("metadata/en-US/release_notes.txt", __dir__)
+    notes = File.exist?(notes_path) ? File.read(notes_path).strip : ""
     upload_to_testflight(
       api_key: asc[:api_key],
       skip_waiting_for_build_processing: true,
       distribute_external: false,
-      changelog: "Hangar #{version} (#{build})"
+      changelog: ["Hangar #{version} (#{build})", notes].reject(&:empty?).join("\n\n")
     )
   end
 
