@@ -5,7 +5,8 @@ name: Release iOS
 # new versionName passes CI on main and starts this; a pushed tag starts it too. Running it by hand
 # from main builds main as it is, with the versionName it has and a new build number, for a build
 # that doesn't need a version bump. Sending a build on from TestFlight (external testers, the App
-# Store) is done in App Store Connect.
+# Store) is done in App Store Connect. TestFlight's "What to Test" is the release notes, the same
+# text Play gets: from a tag, the notes Tag release had an LLM write; from main, written for this run.
 on:
   push:
     tags:
@@ -70,6 +71,14 @@ jobs:
           ruby-version: "3.3"
           working-directory: ios-app
           bundler-cache: true
+
+      # fastlane/metadata/en-US/release_notes.txt, which the beta lane gives TestFlight.
+      - name: Write the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+        run: python3 -I .github/scripts/release-notes.py hangar --metadata ios-app/fastlane/metadata
 
       - name: Build and upload to TestFlight
         working-directory: ios-app

@@ -46,6 +46,23 @@ jobs:
       - name: Run pre-commit checks
         run: mise run pre-commit
 
+  # A merge that changes versionName releases it (Tag release), so a malformed version, or a bump
+  # that doesn't go strictly past both main's and every released version, fails here, before the
+  # merge, rather than reaching the stores.
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check versionName only goes up
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Unset on pushes to main, which only check against the tags.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: .github/scripts/check-version.sh
+
   # Fails when mise.lock or mise.ci.lock is out of date with mise.toml and mise.ci.toml: a tool
   # added or repinned without `mise lock`, or a platform missing from lockfile_platforms. A
   # --locked install only finds that out on the platform that lacks the entry, so this catches it

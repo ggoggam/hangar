@@ -1,9 +1,10 @@
 name: Tag release
 
 # versionName in android-app/module.yaml is the one place a release is decided. When CI passes on
-# main and there's no v<versionName> tag yet, this tags that commit, starts Release Android and
-# Release iOS from the tag, and publishes a GitHub release for it. Tags pushed with GITHUB_TOKEN start no workflows, so the release is started here with a
-# workflow_dispatch, which is the one event that token can start.
+# main and there's no v<versionName> tag yet, this tags that commit, has an LLM write the store
+# release notes and publishes them as a GitHub release for the tag, then starts Release Android and
+# Release iOS from the tag. Tags pushed with GITHUB_TOKEN start no workflows, so the releases are
+# started here with a workflow_dispatch, which is the one event that token can start.
 on:
   workflow_run:
     workflows:
@@ -35,6 +36,14 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.SHA }}
+          # The history without file contents, for the commits the release notes summarise.
+          fetch-depth: 0
+          filter: blob:none
+
+      # CI's version job already turned down a lowered version in the pull request; this catches
+      # one that reached main another way.
+      - name: Check the version only goes up
+        run: .github/scripts/check-version.sh
 
       # versionCode isn't checked here: Release Android works it out.
       - name: Tag a new version
@@ -57,6 +66,30 @@ jobs:
           git push origin "refs/tags/$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # The store "What's new", written by an LLM from the commits since the last tag, published as
+      # the GitHub release for the tag: the text first, then the pull requests GitHub lists, and the
+      # text again as release-notes-en-US.txt, which both releases download so Play and TestFlight
+      # get the same. Before the releases start, and never holding them up: if it fails they write
+      # their own.
+      - name: Write the release notes and create the GitHub release
+        if: steps.tag.outputs.tag
+        continue-on-error: true
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+        run: |
+          dir="$RUNNER_TEMP/release-notes"
+          if python3 -I .github/scripts/release-notes.py hangar --tag "$TAG" --generate --out "$dir"; then
+            gh release create "$TAG" --verify-tag --generate-notes --title "Hangar ${TAG#v}" \
+              --notes "$(cat "$dir/release-notes-en-US.txt")" "$dir/release-notes-en-US.txt"
+          else
+            # The release still lists the pull requests; the releases write their own notes.
+            gh release create "$TAG" --verify-tag --generate-notes --title "Hangar ${TAG#v}"
+            exit 1
+          fi
+
       - name: Start Release Android
         if: steps.tag.outputs.tag
         env:
@@ -72,12 +105,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: gh workflow run release-ios.yml --ref "$TAG"
-
-      # Last, so a GitHub release that fails holds up neither store. The notes list the pull requests
-      # merged since the previous tag; edit them on GitHub afterwards if they need more.
-      - name: Create GitHub release
-        if: ${{ !cancelled() && steps.tag.outputs.tag }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: gh release create "$TAG" --verify-tag --generate-notes --title "Hangar ${TAG#v}"

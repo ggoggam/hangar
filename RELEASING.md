@@ -9,7 +9,9 @@ the work is the one-time setup below; after that, a release is a merged version 
 ## Releasing a version
 
 In a pull request, bump `versionName` in `android-app/module.yaml`. That's the only version you
-edit.
+edit. CI's **version** job fails the pull request if it isn't `MAJOR.MINOR.PATCH`, or if the bump
+doesn't go strictly past both `main`'s `versionName` and the latest `v*` tag (a bump to a version
+already released, or one `main` already made in another pull request).
 
 `versionCode` isn't kept in the repo. Play turns down a `versionCode` it has seen before, in any
 track, so Release Android works it out for each build: the commit count, or one past the highest
@@ -20,9 +22,18 @@ default, 1.
 Once it's merged and CI passes on `main`, **Tag release** tags the merge commit `v` plus
 `versionName` and starts **Release Android** and **Release iOS** from that tag. Release Android builds the signed
 bundle, keeps it as the run's artifact and uploads it to the track in the `PLAY_TRACK` repository
-variable (closed testing if it's unset). Tag release also publishes a GitHub release for the tag,
-with notes listing the pull requests merged since the previous one, to edit on GitHub if they need
-more. A merge that leaves `versionName` alone releases nothing.
+variable (closed testing if it's unset). A merge that leaves `versionName` alone releases nothing.
+
+Before starting them, Tag release has an LLM write the release notes and publishes a GitHub release
+for the tag: the notes, then the pull requests merged since the previous tag. The notes are short
+`•` lines on what changed for users, at most 500 characters (Play's limit), written by
+`.github/scripts/release-notes.py` from the commits since the previous `v*` tag through OpenRouter
+(the `OPENROUTER_API_KEY` secret; the `RELEASE_NOTES_MODEL` variable overrides the default model,
+`anthropic/claude-sonnet-5.5`). They're also on the release as `release-notes-en-US.txt`, which both
+releases download: Play gets them as "What's new", TestFlight as "What to Test" after the version
+line, through `ios-app/fastlane/metadata/en-US/release_notes.txt` (not committed). A run from
+`main` writes its own. Without the key, or if the model keeps failing, they're a generic "bug fixes
+and improvements" line, so a release never waits on them.
 
 Pushing a `v*` tag yourself still starts a release, and Release Android checks that it matches
 `versionName`. If a release fails after its tag is pushed, fix it and run **Release Android** again

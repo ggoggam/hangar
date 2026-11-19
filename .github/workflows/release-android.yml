@@ -7,6 +7,8 @@ name: Release Android
 # Running it by hand picks the track, from a tag or from main. From main it builds main as it is,
 # with the versionName it has and a new versionCode, for a build that doesn't need a version bump. "none" only builds the bundle, which is how the
 # first one gets to Play Console, since Play takes no API uploads before that (see RELEASING.md).
+# Every upload carries Play's "What's new": from a tag, the notes Tag release had an LLM write;
+# from main, written for this run (.github/scripts/release-notes.py).
 on:
   push:
     tags:
@@ -160,6 +162,17 @@ jobs:
           if-no-files-found: error
 
       # A third-party action with the service account's key, so it's pinned to a commit.
+      # From a tag, the notes Tag release published with it, so Play and TestFlight say the same;
+      # otherwise an LLM writes them from the commits since the last tag. Never fails the release:
+      # without the model they're a generic "bug fixes" line.
+      - name: Write the release notes
+        if: env.TRACK != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+        run: python3 -I .github/scripts/release-notes.py hangar --whatsnew "$RUNNER_TEMP/whatsnew"
+
       - name: Upload to Google Play
         if: env.TRACK != 'none'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
@@ -170,3 +183,4 @@ jobs:
           releaseName: ${{ steps.version.outputs.version }} (${{ steps.code.outputs.code }})
           track: ${{ env.TRACK }}
           status: ${{ env.STATUS }}
+          whatsNewDirectory: ${{ runner.temp }}/whatsnew
