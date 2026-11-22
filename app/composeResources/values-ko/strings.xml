@@ -308,6 +308,8 @@
     <string name="settings_title">설정</string>
     <string name="settings_appearance">화면</string>
     <string name="settings_dark_mode">다크 모드</string>
+    <string name="settings_about">정보</string>
+    <string name="settings_version">버전</string>
     <string name="settings_account">계정</string>
     <string name="settings_sign_out">로그아웃</string>
     <string name="settings_signed_in">로그인 계정</string>
