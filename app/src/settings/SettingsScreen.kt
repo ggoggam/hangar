@@ -39,6 +39,7 @@ import com.composables.icons.lucide.Building2
 import com.composables.icons.lucide.CircleDollarSign
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.HardDrive
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
@@ -69,7 +70,8 @@ import org.koin.compose.koinInject
 
 /**
  * The account, organizations and platform as flyctl's `auth`, `orgs` and `platform` commands show
- * them, the other accounts on this device, background checks, the app lock, the theme, and signing out.
+ * them, the other accounts on this device, background checks, the app lock, the theme, signing out,
+ * and the app's version.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,6 +175,12 @@ fun SettingsScreen(
                 SettingRow(stringResource(Res.string.settings_dark_mode), icon = Lucide.Moon, onClick = { theme.setDark(!dark) }) {
                     Switch(checked = dark, onCheckedChange = null)
                 }
+                RowDivider()
+            }
+
+            item(key = "about") {
+                Header(stringResource(Res.string.settings_about))
+                SettingRow(stringResource(Res.string.settings_version), icon = Lucide.Info, detail = appVersion())
                 RowDivider()
             }
         }
