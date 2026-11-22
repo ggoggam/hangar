@@ -131,22 +131,24 @@ jobs:
   # team's certificate, so none is needed here.
   ios:
     name: ios
-    runs-on: macos-latest
+    # The Xcode 27 image, as the Mac that releases Daytwo and Sokuri: macos-latest stops at Xcode
+    # 26. Release iOS builds on the same image and Xcode, and restores this job's cache.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v6
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: "27.2"
 
       - uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/JetBrains/Kotlin
             ~/.konan
-          key: kotlin-${{ runner.os }}-ios-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
+          key: kotlin-${{ runner.os }}-xcode27-ios-${{ hashFiles('kotlin', 'libs.versions.toml', '**/module.yaml') }}
           restore-keys: |
-            kotlin-${{ runner.os }}-ios-
+            kotlin-${{ runner.os }}-xcode27-ios-
 
       - name: Test core on the iOS simulator
         run: ./kotlin test -m core -p iosSimulatorArm64

@@ -2,7 +2,7 @@
 
 Thanks for helping. Hangar is a standalone Kotlin Toolchain project: the committed `./kotlin`
 wrapper pins the toolchain and provisions its own JDK, so a clone needs nothing else for Android
-and the JVM tests. iOS needs a Mac with Xcode 26.
+and the JVM tests. iOS needs a Mac with Xcode 27.
 
 ```sh
 mise trust
