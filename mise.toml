@@ -290,7 +290,7 @@ run = '''
 set -euo pipefail
 command -v axe >/dev/null || { echo "Needs AXe: brew install cameroncooke/axe/axe" >&2; exit 1; }
 ./kotlin build -m ios-app -p iosSimulatorArm64
-app=build/tasks/_ios-app_buildIosAppIosSimulatorArm64Debug/bin/Debug-iphonesimulator/ios-app.app
+app=build/tasks/_ios-app_buildIosAppIosSimulatorArm64Debug/bin/Debug-iphonesimulator/Hangar.app
 out=ios-app/fastlane/screenshots/en-US
 mkdir -p "$out"
 

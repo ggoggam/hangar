@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "FEB19AC6397754D420EBE079"
-               BuildableName = "ios-app.app"
+               BuildableName = "Hangar.app"
                BlueprintName = "app"
                ReferencedContainer = "container:module.xcodeproj">
             </BuildableReference>
@@ -47,7 +47,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FEB19AC6397754D420EBE079"
-            BuildableName = "ios-app.app"
+            BuildableName = "Hangar.app"
             BlueprintName = "app"
             ReferencedContainer = "container:module.xcodeproj">
          </BuildableReference>
@@ -64,7 +64,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FEB19AC6397754D420EBE079"
-            BuildableName = "ios-app.app"
+            BuildableName = "Hangar.app"
             BlueprintName = "app"
             ReferencedContainer = "container:module.xcodeproj">
          </BuildableReference>

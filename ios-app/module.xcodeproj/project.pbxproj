@@ -8,7 +8,7 @@
 
 /* Begin PBXFileReference section */
 		FEB1934D82BFAAC63527025C /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.info; name = Info.plist; path = src/Info.plist; sourceTree = "<group>"; };
-		FEB199561920AE7A42F404C8 /* ios-app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ios-app.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FEB199561920AE7A42F404C8 /* Hangar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hangar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -43,7 +43,7 @@
 		FEB1907774C754B7D0E47661 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FEB199561920AE7A42F404C8 /* ios-app.app */,
+				FEB199561920AE7A42F404C8 /* Hangar.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -78,7 +78,7 @@
 			);
 			name = app;
 			productName = app;
-			productReference = FEB199561920AE7A42F404C8 /* ios-app.app */;
+			productReference = FEB199561920AE7A42F404C8 /* Hangar.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -160,7 +160,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.ggoggam.hangar;
 				PRODUCT_MODULE_NAME = app;
-				PRODUCT_NAME = "ios-app";
+				PRODUCT_NAME = Hangar;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -189,7 +189,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.ggoggam.hangar;
 				PRODUCT_MODULE_NAME = app;
-				PRODUCT_NAME = "ios-app";
+				PRODUCT_NAME = Hangar;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = (
